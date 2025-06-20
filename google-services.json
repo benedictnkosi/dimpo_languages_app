@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "528892435856",
+    "project_id": "southafricanlanguages",
+    "storage_bucket": "southafricanlanguages.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:528892435856:android:a656fc9a0d0d1189b56715",
+        "android_client_info": {
+          "package_name": "com.dimpolanguages"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcwBF12SCgbqo2XnY5B5adKO7ZxjKaJlg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
