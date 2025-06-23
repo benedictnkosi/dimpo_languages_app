@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Pressable, TextInput } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useFeedback } from '../contexts/FeedbackContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import React, { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
 import { colors } from '../constants/Colors';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { AudioPlayer } from './AudioPlayer';
 
 interface Word {
@@ -33,7 +33,7 @@ function getWordById(words: Word[], id: string | number) {
 export function FillInBlankQuestion({
     words,
     sentenceWords,
-    options,
+    options = [],
     blankIndex,
     selectedLanguage,
     questionId,
@@ -60,6 +60,14 @@ export function FillInBlankQuestion({
     const [userInput, setUserInput] = useState('');
     const [autoPlayAudio, setAutoPlayAudio] = React.useState(true);
 
+    // Disable auto-play after 3 seconds on page load
+    useEffect(() => {
+        setAutoPlayAudio(true); // Reset autoPlayAudio to true for each new question
+        setTimeout(() => {
+            setAutoPlayAudio(false);
+        }, 3000);
+    }, [questionId]); // Add questionId as dependency to reset autoPlayAudio for each new question
+
     // Additional logging for state
     console.log('[FillInBlankQuestion] sentenceWords:', sentenceWords);
     console.log('[FillInBlankQuestion] options:', options);
@@ -67,7 +75,7 @@ export function FillInBlankQuestion({
 
     // Fallback: If sentenceWords is empty, build a sentence from options and blankIndex
     const effectiveSentenceWords = (sentenceWords && sentenceWords.length > 0)
-        ? sentenceWords
+        ? sentenceWords.map((id, idx) => idx === blankIndex ? null : id)
         : options.map((id, idx) => idx === blankIndex ? null : id);
 
     // Build the sentence with a blank (TextInput)
@@ -110,6 +118,30 @@ export function FillInBlankQuestion({
         );
     });
 
+    const handleCheck = useCallback(() => {
+        const correctWord = getWordById(words, sentenceWords[blankIndex] ?? options[blankIndex]);
+        const correctAnswer = correctWord?.translations[selectedLanguage] || '';
+        const isAnswerCorrect = userInput.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+        setFeedback({
+            isChecked: true,
+            isCorrect: isAnswerCorrect,
+            feedbackText: isAnswerCorrect ? 'Correct!' : "That's not quite right",
+            correctAnswer: !isAnswerCorrect ? correctAnswer : undefined,
+            questionId,
+        });
+    }, [words, sentenceWords, options, blankIndex, selectedLanguage, userInput, setFeedback, questionId]);
+
+    const resetQuestion = useCallback(() => {
+        resetFeedback();
+        setSelectedOption(null);
+        setUserInput('');
+    }, [resetFeedback]);
+
+    useEffect(() => {
+        setOnCheck?.(handleCheck);
+        setOnContinue?.(resetQuestion);
+    }, [setOnCheck, setOnContinue, handleCheck, resetQuestion]);
+
     // Only show the fallback message if both sentenceWords and options are empty
     if ((!sentenceWords || sentenceWords.length === 0) && (!options || options.length === 0)) {
         return (
@@ -124,37 +156,9 @@ export function FillInBlankQuestion({
 
     const availableOptions = options.filter(id => selectedOption === null || Number(id) !== selectedOption);
 
-    function handleSelectOption(id: string | number) {
-        setSelectedOption(Number(id));
-        setIsQuestionAnswered(true);
-    }
-
-    function handleCheck() {
-        const correctWord = getWordById(words, sentenceWords[blankIndex] ?? options[blankIndex]);
-        const correctAnswer = correctWord?.translations[selectedLanguage] || '';
-        const isAnswerCorrect = userInput.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
-        setFeedback({
-            isChecked: true,
-            isCorrect: isAnswerCorrect,
-            feedbackText: isAnswerCorrect ? 'Correct!' : "That's not quite right",
-            correctAnswer: !isAnswerCorrect ? correctAnswer : undefined,
-            questionId,
-        });
-    }
-
-    function resetQuestion() {
-        resetFeedback();
-        setSelectedOption(null);
-        setUserInput('');
-    }
-
-    useEffect(() => {
-        setOnCheck?.(handleCheck);
-        setOnContinue?.(resetQuestion);
-    }, [setOnCheck, setOnContinue, handleCheck, resetQuestion]);
-
-    // Collect audio URLs for all options in the selected language (use options, not availableOptions)
-    const allOptionAudio = options
+    // Collect audio URLs for all options in the selected language (use options if available, otherwise sentenceWords)
+    const audioSourceIds = options.length > 0 ? options : sentenceWords;
+    const allOptionAudio = audioSourceIds
         .map(optId => {
             const w = getWordById(words, optId);
             if (!w) return null;
@@ -285,4 +289,6 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         textAlign: 'center',
     },
-}); 
+});
+
+export default FillInBlankQuestion; 

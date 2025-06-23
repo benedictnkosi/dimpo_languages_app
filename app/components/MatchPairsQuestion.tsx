@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet, Pressable, Text, Dimensions, Animated, useColorScheme } from 'react-native';
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
-import { HOST_URL } from '@/config/api';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { HOST_URL } from '@/config/api';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
+import React from 'react';
+import { Animated, Dimensions, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { useFeedback } from '../contexts/FeedbackContext';
 
 interface Word {
@@ -18,7 +18,6 @@ interface MatchPairsQuestionProps {
     words: Word[];
     selectedLanguage: string;
     areResourcesDownloaded: boolean;
-    onCheck?: () => void;
     matchType?: 'audio' | 'text';
     questionId: string;
     setOnCheck?: (fn: () => void) => void;
@@ -26,49 +25,13 @@ interface MatchPairsQuestionProps {
     setIsQuestionAnswered: (answered: boolean) => void;
 }
 
-function AudioButton({ audioUrl, isSelected }: { audioUrl?: string, isSelected?: boolean }) {
-    const [sound, setSound] = React.useState<Audio.Sound | null>(null);
-    const [isPlaying, setIsPlaying] = React.useState(false);
-
-    async function playSound() {
-        try {
-            if (!audioUrl) return;
-            if (sound) {
-                if (isPlaying) {
-                    await sound.stopAsync();
-                    setIsPlaying(false);
-                } else {
-                    await sound.playAsync();
-                    setIsPlaying(true);
-                }
-            } else {
-                const { sound: newSound } = await Audio.Sound.createAsync(
-                    { uri: audioUrl },
-                    { shouldPlay: true }
-                );
-                setSound(newSound);
-                setIsPlaying(true);
-            }
-        } catch (error) {
-            console.error('Error playing sound:', error);
-        }
-    }
-
-    React.useEffect(() => {
-        return sound ? () => { sound.unloadAsync(); } : undefined;
-    }, [sound]);
-
+function AudioButton({ isSelected }: { isSelected?: boolean }) {
     return (
-        <Pressable
-            onPress={playSound}
-            style={[styles.audioButton, isSelected && styles.audioButtonSelected]}
-            accessibilityLabel="Play word audio"
-            disabled={!audioUrl}
-        >
+        <View style={[styles.audioButton, isSelected && styles.audioButtonSelected]}>
             <View style={styles.audioIcon}>
                 <Text style={{ color: isSelected ? '#22A9F5' : '#22A9F5', fontSize: 22 }}>🔊</Text>
             </View>
-        </Pressable>
+        </View>
     );
 }
 
@@ -76,7 +39,6 @@ export function MatchPairsQuestion({
     words,
     selectedLanguage,
     areResourcesDownloaded,
-    onCheck,
     matchType = 'audio',
     questionId,
     setOnCheck,
@@ -96,6 +58,8 @@ export function MatchPairsQuestion({
     const [audioUrlMap, setAudioUrlMap] = React.useState<Map<number, string>>(new Map());
     const fadeAnim = React.useRef(new Animated.Value(0)).current;
     const { setFeedback, resetFeedback } = useFeedback();
+    // Store a ref to the currently playing sound so we can stop/unload it
+    const soundRef = React.useRef<Audio.Sound | null>(null);
 
     // Update audio URLs when words or language changes
     React.useEffect(() => {
@@ -151,43 +115,43 @@ export function MatchPairsQuestion({
         }
     }
 
-    const handleAudioCardPress = (wordId: number) => {
+    const handleAudioCardPress = async (wordId: number) => {
         if (disabledLeftIds.has(wordId) || justMatchedId === wordId) return;
 
-        // If the card is already selected, just play the audio
+        // If the card is already selected, just return
         if (selectedAudioId === wordId) {
-            const audioUrl = audioUrlMap.get(wordId);
-            if (audioUrl) {
-                const sound = new Audio.Sound();
-                sound.loadAsync({ uri: audioUrl }).then(() => {
-                    sound.playAsync();
-                });
-                sound.setOnPlaybackStatusUpdate((status) => {
-                    if (status.isLoaded && status.didJustFinish) {
-                        sound.unloadAsync();
-                    }
-                });
-            }
             return;
         }
 
-        // Get the audio URL from the map
-        const audioUrl = audioUrlMap.get(wordId);
+        setSelectedAudioId(wordId);
 
-        // Play the audio if available
-        if (audioUrl) {
-            const sound = new Audio.Sound();
-            sound.loadAsync({ uri: audioUrl }).then(() => {
-                sound.playAsync();
-            });
+        // Play the audio for this word
+        const audioUrl = audioUrlMap.get(wordId);
+        if (!audioUrl) return;
+        try {
+            // Stop and unload any previous sound
+            if (soundRef.current) {
+                await soundRef.current.stopAsync();
+                await soundRef.current.unloadAsync();
+                soundRef.current = null;
+            }
+            const { sound } = await Audio.Sound.createAsync(
+                { uri: audioUrl },
+                { shouldPlay: true }
+            );
+            soundRef.current = sound;
+            // Unload when finished
             sound.setOnPlaybackStatusUpdate((status) => {
                 if (status.isLoaded && status.didJustFinish) {
                     sound.unloadAsync();
+                    if (soundRef.current === sound) {
+                        soundRef.current = null;
+                    }
                 }
             });
+        } catch (error) {
+            // fail silently
         }
-
-        setSelectedAudioId(wordId);
     };
 
     const handleTranslationCardPress = (wordId: number) => {
@@ -296,14 +260,9 @@ export function MatchPairsQuestion({
         setOnContinue?.(resetQuestion);
     }, [setOnCheck, setOnContinue, handleCheck, resetQuestion]);
 
-    function handleSelectOption(id: string | number) {
-        // ... existing code ...
-        setIsQuestionAnswered(true);
-    }
-
     return (
         <ThemedView style={[styles.container, { backgroundColor: isDark ? '#181A20' : '#fff' }]}>
-            <ThemedText style={styles.title} children="🔗 Let’s do some matching!" />
+            <ThemedText style={styles.title} children="🔗 Let's do some matching!" />
             <View style={styles.pairRowHeader}>
                 <View style={{ width: cardWidth }} />
                 <View style={{ width: cardWidth }} />
@@ -327,7 +286,7 @@ export function MatchPairsQuestion({
                                 disabled={isLeftDisabled}
                             >
                                 {matchType === 'audio' ? (
-                                    <AudioButton audioUrl={audioUrl} isSelected={isSelected} />
+                                    <AudioButton isSelected={isSelected} />
                                 ) : (
                                     <ThemedText style={[styles.translationText, isDark && styles.translationTextDark]} children={selectedLanguageWord} />
                                 )}

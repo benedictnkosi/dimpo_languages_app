@@ -1,16 +1,14 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet, Pressable, ActivityIndicator, View, ScrollView } from 'react-native';
-import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 
-import { HelloWave } from '@/components/HelloWave';
+import { Header } from '@/components/Header';
+import { LANGUAGE_EMOJIS } from '@/components/language-emojis';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { Language } from '@/types/language';
 import { HOST_URL } from '@/config/api';
-import { LANGUAGE_EMOJIS } from '@/components/language-emojis';
-import { Header } from '@/components/Header';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Language } from '@/types/language';
 
 // Speaker data for South African languages
 const SPEAKERS_DATA: Record<string, { speakers: number; percentage: number }> = {
@@ -103,6 +101,20 @@ export default function HomeScreen() {
     });
   };
 
+  const handleShareApp = async () => {
+    try {
+      const iosLink = 'https://apps.apple.com/app/dimpo-languages/6742684696';
+      const androidLink = 'https://play.google.com/store/apps/details?id=com.dimpolanguages';
+      
+      await Share.share({
+        message: `Check out this amazing South African languages learning app! 🌍🇿🇦 Learn Zulu, Xhosa, Afrikaans, and more with interactive lessons.\n\nDownload now:\n📱 iOS: ${iosLink}\n🤖 Android: ${androidLink}`,
+        title: 'Dimpo Languages App',
+      });
+    } catch (error) {
+      console.error('Error sharing app:', error);
+    }
+  };
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -154,6 +166,7 @@ export default function HomeScreen() {
     languageEmoji: {
       fontSize: 40,
       marginBottom: 10,
+      paddingTop: 20,
     },
     languageName: {
       fontSize: 18,
@@ -176,6 +189,30 @@ export default function HomeScreen() {
       height: 200,
       width: '100%',
     },
+    shareButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      marginHorizontal: 20,
+      marginTop: 20,
+      marginBottom: 40,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    shareButtonPressed: {
+      opacity: 0.8,
+      transform: [{ scale: 0.98 }],
+    },
+    shareButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 
   return (
@@ -190,57 +227,73 @@ export default function HomeScreen() {
         ) : error ? (
           <ThemedText>{error}</ThemedText>
         ) : (
-          <ThemedView style={styles.languagesContainer}>
-            {languages
-              .filter(l => l.name !== 'English')
-              .sort((a, b) => {
-                const speakersA = SPEAKERS_DATA[getSpeakersKey(a.name)]?.speakers || 0;
-                const speakersB = SPEAKERS_DATA[getSpeakersKey(b.name)]?.speakers || 0;
-                return speakersB - speakersA;
-              })
-              .map((language) => (
-                <Pressable
-                  key={language.id}
-                  style={({ pressed }) => [
-                    [
-                      styles.languageCard,
-                      {
-                        backgroundColor: LANGUAGE_COLORS[language.name]
-                          ? (isDark
-                            ? LANGUAGE_COLORS[language.name].dark
-                            : LANGUAGE_COLORS[language.name].light)
-                          : isDark
-                            ? colors.surface
-                            : '#fff'
-                      },
-                    ],
-                    pressed && styles.languageCardPressed,
-                  ]}
-                  onPress={() => handleLanguagePress(language)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Select ${language.name}`}
-                >
-                  <ThemedText style={styles.languageEmoji}>
-                    {LANGUAGE_EMOJIS[language.name] || '🌍'}
-                  </ThemedText>
-                  <ThemedText style={styles.languageName}>
-                    {language.name}
-                  </ThemedText>
-                  <ThemedText style={styles.languageNativeName}>
-                    {language.nativeName}
-                  </ThemedText>
-                  {(() => {
-                    const key = getSpeakersKey(language.name);
-                    const speakers = SPEAKERS_DATA[key]?.speakers;
-                    return speakers ? (
-                      <ThemedText style={styles.languageSpeakers}>
-                        {formatSpeakers(speakers)}
-                      </ThemedText>
-                    ) : null;
-                  })()}
-                </Pressable>
-              ))}
-          </ThemedView>
+          <View>
+            <ThemedView style={styles.languagesContainer}>
+              {languages
+                .filter(l => l.name !== 'English')
+                .sort((a, b) => {
+                  const speakersA = SPEAKERS_DATA[getSpeakersKey(a.name)]?.speakers || 0;
+                  const speakersB = SPEAKERS_DATA[getSpeakersKey(b.name)]?.speakers || 0;
+                  return speakersB - speakersA;
+                })
+                .map((language) => (
+                  <Pressable
+                    key={language.id}
+                    style={({ pressed }) => [
+                      [
+                        styles.languageCard,
+                        {
+                          backgroundColor: LANGUAGE_COLORS[language.name]
+                            ? (isDark
+                              ? LANGUAGE_COLORS[language.name].dark
+                              : LANGUAGE_COLORS[language.name].light)
+                            : isDark
+                              ? colors.surface
+                              : '#fff'
+                        },
+                      ],
+                      pressed && styles.languageCardPressed,
+                    ]}
+                    onPress={() => handleLanguagePress(language)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${language.name}`}
+                  >
+                    <ThemedText style={styles.languageEmoji}>
+                      {LANGUAGE_EMOJIS[language.name] || '🌍'}
+                    </ThemedText>
+                    <ThemedText style={styles.languageName}>
+                      {language.name}
+                    </ThemedText>
+                    <ThemedText style={styles.languageNativeName}>
+                      {language.nativeName}
+                    </ThemedText>
+                    {(() => {
+                      const key = getSpeakersKey(language.name);
+                      const speakers = SPEAKERS_DATA[key]?.speakers;
+                      return speakers ? (
+                        <ThemedText style={styles.languageSpeakers}>
+                          {formatSpeakers(speakers)}
+                        </ThemedText>
+                      ) : null;
+                    })()}
+                  </Pressable>
+                ))}
+            </ThemedView>
+            
+            <Pressable
+              style={({ pressed }) => [
+                styles.shareButton,
+                pressed && styles.shareButtonPressed,
+              ]}
+              onPress={handleShareApp}
+              accessibilityRole="button"
+              accessibilityLabel="Share app"
+            >
+              <ThemedText style={styles.shareButtonText}>
+              🔗 Invite friends
+              </ThemedText>
+            </Pressable>
+          </View>
         )}
       </ThemedView>
     </ScrollView>

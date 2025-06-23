@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Image } from 'react-native';
-import { useTheme } from '@/contexts/ThemeContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { HOST_URL } from '@/config/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import React, { useEffect, useState } from 'react';
+import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Learner {
     id: number;
@@ -32,7 +33,7 @@ export default function ScoreboardScreen() {
                 setIsLoading(true);
                 setError(null);
                 const response = await fetch(
-                    `${process.env.EXPO_PUBLIC_API_URL}/api/language-learners/scoreboard/${user?.uid}`
+                    `${HOST_URL}/api/language-learners/scoreboard/${user?.uid}`
                 );
                 if (!response.ok) {
                     throw new Error('Failed to fetch scoreboard');

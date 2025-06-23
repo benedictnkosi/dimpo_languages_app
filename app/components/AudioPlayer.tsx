@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, StyleSheet, Image, Pressable, useColorScheme, Alert } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
-import { Audio, AVPlaybackStatus } from 'expo-av';
 import { HOST_URL } from '@/config/api';
+import { Audio, AVPlaybackStatus } from 'expo-av';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Image, Pressable, StyleSheet, useColorScheme, View } from 'react-native';
 
 const HOST_PREFIX = `${HOST_URL}/api/word/audio/get/`;
 
@@ -174,7 +174,7 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
             accessibilityLabel={accessibilityLabel}
             disabled={!audioUrls?.length}
         >
-            <ThemedText style={{ fontSize: 32 }}>{accessibilityLabel === 'Play slow audio' ? '🐢' : '🔊'}</ThemedText>
+            <ThemedText style={{ fontSize: 32, lineHeight: 48 }}>{accessibilityLabel === 'Play slow audio' ? '🐢' : '🔊'}</ThemedText>
         </Pressable>
     );
 }
@@ -290,9 +290,9 @@ const styles = StyleSheet.create({
     audioButton: {
         alignItems: 'center',
         justifyContent: 'center',
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
     },
     audioButtonsContainer: {
         flexDirection: 'row',
@@ -303,4 +303,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginBottom: 8,
     },
-}); 
+});
+
+export default AudioPlayer; 

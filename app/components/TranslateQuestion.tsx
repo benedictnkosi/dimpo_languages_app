@@ -1,12 +1,11 @@
-import React, { useMemo, useEffect } from 'react';
-import { View, StyleSheet, Pressable, Image } from 'react-native';
-import { Audio } from 'expo-av';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useFeedback } from '../contexts/FeedbackContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Audio } from 'expo-av';
+import React, { useEffect, useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { AudioPlayer } from './AudioPlayer';
-import { HOST_URL } from '@/config/api';
 import { WordSelectionOptions } from './WordSelectionOptions';
 
 interface Word {
@@ -30,84 +29,9 @@ interface TranslateQuestionProps {
     setIsQuestionAnswered: (answered: boolean) => void;
 }
 
-function useAudioUri(audioFile: string | undefined) {
-    const [uri, setUri] = React.useState<string | undefined>(undefined);
-    React.useEffect(() => {
-        if (!audioFile) {
-            setUri(undefined);
-            return;
-        }
-        setUri(audioFile);
-    }, [audioFile]);
-    return uri;
-}
-
-function AudioButton({ audioUrls }: { audioUrls: string[] }) {
-    const [sound, setSound] = React.useState<Audio.Sound | null>(null);
-    const [isPlaying, setIsPlaying] = React.useState(false);
-    const [currentIndex, setCurrentIndex] = React.useState(0);
-
-    async function playNextSound() {
-        if (currentIndex >= audioUrls.length) {
-            setCurrentIndex(0);
-            setIsPlaying(false);
-            return;
-        }
-
-        try {
-            if (sound) {
-                await sound.unloadAsync();
-            }
-
-            const { sound: newSound } = await Audio.Sound.createAsync(
-                { uri: audioUrls[currentIndex] },
-                { shouldPlay: true }
-            );
-
-            setSound(newSound);
-            setIsPlaying(true);
-
-            newSound.setOnPlaybackStatusUpdate((status) => {
-                if (status.isLoaded && status.didJustFinish) {
-                    setCurrentIndex(prev => prev + 1);
-                    playNextSound();
-                }
-            });
-        } catch (error) {
-            // fail silently
-            setCurrentIndex(prev => prev + 1);
-            playNextSound();
-        }
-    }
-
-    async function handlePlayPress() {
-        if (isPlaying) {
-            if (sound) {
-                await sound.stopAsync();
-                await sound.unloadAsync();
-            }
-            setIsPlaying(false);
-            setCurrentIndex(0);
-        } else {
-            setCurrentIndex(0);
-            playNextSound();
-        }
-    }
-
-    React.useEffect(() => {
-        return sound ? () => { sound.unloadAsync(); } : undefined;
-    }, [sound]);
-
-    return (
-        <Pressable onPress={handlePlayPress} style={styles.audioButton} accessibilityLabel="Play sentence audio" disabled={audioUrls.length === 0}>
-            <ThemedText style={{ fontSize: 22 }}>🔊</ThemedText>
-        </Pressable>
-    );
-}
-
 export function TranslateQuestion({
     words,
-    options,
+    options = [],
     selectedLanguage,
     direction,
     sentenceWords,
@@ -120,8 +44,16 @@ export function TranslateQuestion({
 }: TranslateQuestionProps) {
     const [selectedWordIds, setSelectedWordIds] = React.useState<number[]>([]);
     const { setFeedback, resetFeedback } = useFeedback();
-    const { colors, isDark } = useTheme();
-    const audioRef = React.useRef<Audio.Sound | null>(null);
+    const { colors } = useTheme();
+    const [autoPlay, setAutoPlay] = React.useState(true);
+
+    // Disable auto-play after 3 seconds on page load
+    useEffect(() => {
+        setAutoPlay(true); // Reset autoPlay to true for each new question
+        setTimeout(() => {
+            setAutoPlay(false);
+        }, 3000);
+    }, [questionId]); // Add questionId as dependency to reset autoPlay for each new question
 
     // Configure audio session on mount
     React.useEffect(() => {
@@ -139,30 +71,12 @@ export function TranslateQuestion({
             }
         }
         configureAudioSession();
-
-        // Cleanup function
-        return () => {
-            if (audioRef.current) {
-                audioRef.current.unloadAsync();
-            }
-        };
     }, []);
 
     // Helper: get word by id
     function getWordById(id: string | number) {
         return words.find(w => w.id === Number(id));
     }
-
-    // Randomly select one of the three GIFs
-    const gifSources = [
-        require('@/assets/images/impatient-kitty.gif'),
-        require('@/assets/images/bunny-waiting.gif'),
-        require('@/assets/images/bubu-dudu-sseeyall.gif'),
-    ];
-    const selectedGif = useMemo(
-        () => gifSources[Math.floor(Math.random() * gifSources.length)],
-        []
-    );
 
     const correctAnswer = sentenceWords?.map(id => {
         const word = getWordById(id);
@@ -203,20 +117,9 @@ export function TranslateQuestion({
                 </ThemedText>
             </View>
         ) : (
-            <AudioPlayer audioUrls={audioUrls} text={sentence} autoPlay={true} />
+            <AudioPlayer audioUrls={audioUrls} text={sentence} autoPlay={autoPlay} />
         );
     }
-
-    // Option cards (bottom)
-    const availableOptions = options.filter((id) => {
-        if (selectedWordIds.includes(Number(id))) return false;
-        const word = getWordById(id);
-        if (!word) return false;
-        const text = direction === 'from_english'
-            ? word.translations[selectedLanguage]
-            : word.translations['en'];
-        return !!text && text.trim().length > 0;
-    });
 
     function handleSelectWord(id: number) {
         setSelectedWordIds(prev => [...prev, id]);
@@ -250,46 +153,6 @@ export function TranslateQuestion({
         setSelectedWordIds([]);
     }
 
-    // Auto-play on mount
-    useEffect(() => {
-        if (direction === 'to_english' && audioUrls.length > 0) {
-            const playAll = async () => {
-                // Cleanup any existing audio
-                if (audioRef.current) {
-                    await audioRef.current.unloadAsync();
-                }
-
-                for (const url of audioUrls) {
-                    try {
-                        const { sound } = await Audio.Sound.createAsync(
-                            { uri: url },
-                            { shouldPlay: true }
-                        );
-                        audioRef.current = sound;
-                        await new Promise(resolve => {
-                            sound.setOnPlaybackStatusUpdate(status => {
-                                if (status.isLoaded && status.didJustFinish) {
-                                    resolve(null);
-                                }
-                            });
-                        });
-                        await sound.unloadAsync();
-                        audioRef.current = null;
-                    } catch (error) {
-                        console.error('Error playing audio:', error);
-                    }
-                }
-            };
-            playAll();
-        }
-
-        return () => {
-            if (audioRef.current) {
-                audioRef.current.unloadAsync();
-            }
-        };
-    }, [direction, audioUrls]);
-
     useEffect(() => {
         setOnCheck?.(handleCheck);
         setOnContinue?.(resetQuestion);
@@ -297,7 +160,7 @@ export function TranslateQuestion({
 
     return (
         <ThemedView style={[styles.container, { backgroundColor: colors.background }]}>
-            <ThemedText style={[styles.title, { color: colors.text }]}>🌐 What’s the meaning?</ThemedText>
+            <ThemedText style={[styles.title, { color: colors.text }]}>🌐 What's the meaning?</ThemedText>
             {promptRow}
             <WordSelectionOptions
                 words={words}
@@ -429,4 +292,6 @@ const styles = StyleSheet.create({
         marginHorizontal: 8,
         alignSelf: 'stretch',
     },
-}); 
+});
+
+export default TranslateQuestion; 

@@ -1,13 +1,13 @@
-import React from 'react';
-import { Pressable, StyleSheet, View, Animated } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
-import { useWindowDimensions } from 'react-native';
+import { HOST_URL } from '@/config/api';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import React from 'react';
+import { Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFeedback } from '../contexts/FeedbackContext';
-import { HOST_URL } from '@/config/api';
-import { Audio } from 'expo-av';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useSound } from '../contexts/SoundContext';
 
 interface FeedbackButtonProps {
     isDisabled: boolean;
@@ -83,6 +83,7 @@ export function FeedbackButton({ isDisabled, onCheck, onContinue }: FeedbackButt
     const soundRef = React.useRef<Audio.Sound | null>(null);
     const latestFeedbackRef = React.useRef({ isCorrect });
     const { colors, isDark } = useTheme();
+    const { soundEnabled } = useSound();
 
     // Update ref when feedback changes
     React.useEffect(() => {
@@ -91,6 +92,9 @@ export function FeedbackButton({ isDisabled, onCheck, onContinue }: FeedbackButt
 
     // Play feedback sound
     async function playFeedbackSound(type: 'correct' | 'wrong') {
+        // Only play sound if sound is enabled
+        if (!soundEnabled) return;
+        
         try {
             if (soundRef.current) {
                 await soundRef.current.unloadAsync();
@@ -321,4 +325,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginTop: 4,
     },
-}); 
+});
+
+export default FeedbackButton; 

@@ -1,8 +1,8 @@
+import { useTheme } from '@/contexts/ThemeContext';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import UpgradeToProButton from '../app/components/UpgradeToProButton';
 import { ThemedText } from './ThemedText';
-import { useTheme } from '@/contexts/ThemeContext';
-import { UpgradeToProButton } from '../app/components/UpgradeToProButton';
 
 interface ProPromoCardProps {
     testID?: string;

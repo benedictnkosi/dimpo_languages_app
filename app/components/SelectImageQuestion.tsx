@@ -1,16 +1,12 @@
-import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Pressable, View, Dimensions, Text, ScrollView } from 'react-native';
-import { Image } from 'expo-image';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { HOST_URL } from '@/config/api';
-import * as FileSystem from 'expo-file-system';
-import { Audio } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
-import { useFeedback } from '../contexts/FeedbackContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AudioPlayer } from './AudioPlayer';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Image } from 'expo-image';
+import React, { useEffect, useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useFeedback } from '../contexts/FeedbackContext';
+import { AudioPlayer } from './AudioPlayer';
 
 interface Word {
     id: number;
@@ -25,41 +21,27 @@ interface SelectImageQuestionProps {
     correctOption: number | null;
     onSelect?: (index: number) => void;
     selectedLanguage: string;
-    areResourcesDownloaded: boolean;
     questionId: string;
     setOnCheck?: (fn: () => void) => void;
     setOnContinue?: (fn: () => void) => void;
     setIsQuestionAnswered: (answered: boolean) => void;
 }
 
-function useAudioUri(audioFile: string | undefined, areResourcesDownloaded: boolean) {
-    const [uri, setUri] = React.useState<string | undefined>(undefined);
-
-    React.useEffect(() => {
-        if (!audioFile) {
-            setUri(undefined);
-            return;
-        }
-        if (areResourcesDownloaded) {
-            const localUri = `${FileSystem.documentDirectory}audio/${audioFile}`;
-            FileSystem.getInfoAsync(localUri).then(info => {
-                if (info.exists) setUri(localUri);
-                else setUri(`${HOST_URL}/api/word/audio/get/${audioFile}`);
-            });
-        } else {
-            setUri(`${HOST_URL}/api/word/audio/get/${audioFile}`);
-        }
-    }, [audioFile, areResourcesDownloaded]);
-
-    return uri;
+// Fisher-Yates shuffle algorithm
+function shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
 }
 
 export function SelectImageQuestion({
     words,
-    options,
+    options = [],
     correctOption,
     selectedLanguage,
-    areResourcesDownloaded,
     questionId,
     setOnCheck,
     setOnContinue,
@@ -67,10 +49,35 @@ export function SelectImageQuestion({
 }: SelectImageQuestionProps) {
     const [selectedIndex, setSelectedIndex] = React.useState<number | null>(null);
     const { setFeedback, resetFeedback } = useFeedback();
-    const insets = useSafeAreaInsets();
     const scrollViewRef = useRef<ScrollView>(null);
-    const { colors, isDark } = useTheme();
+    const { colors } = useTheme();
     const [autoPlayAudio, setAutoPlayAudio] = React.useState(true);
+
+    // Create shuffled options and mapping
+    const [shuffledOptions, setShuffledOptions] = React.useState<string[]>([]);
+    const [originalToShuffledMap, setOriginalToShuffledMap] = React.useState<Map<number, number>>(new Map());
+    const [shuffledToOriginalMap, setShuffledToOriginalMap] = React.useState<Map<number, number>>(new Map());
+
+    // Shuffle options when question changes
+    useEffect(() => {
+        if (options.length > 0) {
+            const shuffled = shuffleArray(options);
+            setShuffledOptions(shuffled);
+            
+            // Create mapping between original and shuffled indices
+            const originalToShuffled = new Map<number, number>();
+            const shuffledToOriginal = new Map<number, number>();
+            
+            shuffled.forEach((optionId, shuffledIndex) => {
+                const originalIndex = options.indexOf(optionId);
+                originalToShuffled.set(originalIndex, shuffledIndex);
+                shuffledToOriginal.set(shuffledIndex, originalIndex);
+            });
+            
+            setOriginalToShuffledMap(originalToShuffled);
+            setShuffledToOriginalMap(shuffledToOriginal);
+        }
+    }, [options, questionId]);
 
     // Scroll to top on mount
     useEffect(() => {
@@ -94,22 +101,14 @@ export function SelectImageQuestion({
         audioFile = correctWord?.audio[selectedLanguage];
     }
 
-    const audioUrl = useAudioUri(audioFile, areResourcesDownloaded);
+    useEffect(() => {
+        setAutoPlayAudio(true); // Reset autoPlayAudio to true for each new question
+        setTimeout(() => {
+            setAutoPlayAudio(false);
+        }, 3000);
+    }, [questionId]); // Add questionId as dependency to reset autoPlayAudio for each new question
 
-    // Add useEffect for initial audio playback
-    React.useEffect(() => {
-        if (audioUrl) {
-            const sound = new Audio.Sound();
-            sound.loadAsync({ uri: audioUrl }).then(() => {
-                sound.playAsync();
-            });
-            return () => {
-                sound.unloadAsync();
-            };
-        }
-    }, [audioUrl]); // Depend on audioUrl instead of empty array
-
-    if (audioFile && audioUrl) {
+    if (audioFile) {
         audioPrompt = (
             <View style={styles.audioPromptContainer}>
                 <View style={styles.audioOnlyWrapper}>
@@ -121,16 +120,20 @@ export function SelectImageQuestion({
 
     console.log('SelectImageQuestion options:', options);
     console.log('SelectImageQuestion words:', words);
+    console.log('Shuffled options:', shuffledOptions);
 
     function handleSelectOption(index: number) {
         setSelectedIndex(index);
         setIsQuestionAnswered(true);
-        setAutoPlayAudio(false);
     }
 
     function handleCheckOrContinue() {
         if (selectedIndex === null) return;
-        const isAnswerCorrect = selectedIndex === correctOption;
+        
+        // Convert shuffled index back to original index for comparison
+        const originalSelectedIndex = shuffledToOriginalMap.get(selectedIndex);
+        const isAnswerCorrect = originalSelectedIndex === correctOption;
+        
         const correctLabel = correctOption !== null ? words[correctOption]?.translations['en'] || '' : '';
         setFeedback({
             isChecked: true,
@@ -161,13 +164,14 @@ export function SelectImageQuestion({
                 <ThemedText style={[styles.title, { color: colors.text }]}>👁️ Which one is it?</ThemedText>
                 {audioPrompt}
                 <View style={styles.optionsGrid}>
-                    {options.map((optionId, index) => {
+                    {shuffledOptions.map((optionId, index) => {
                         const word = words.find(w => String(w.id) === String(optionId));
                         console.log(`Option index ${index}: optionId=${optionId}, word=`, word);
                         if (!word) return null;
                         const selectedLanguageWord = word.translations[selectedLanguage];
                         const isSelected = selectedIndex === index;
-                        const isCorrect = index === correctIndex;
+                        const originalIndex = shuffledToOriginalMap.get(index);
+                        const isCorrect = originalIndex === correctIndex;
 
                         return (
                             <Pressable

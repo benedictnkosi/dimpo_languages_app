@@ -1,10 +1,10 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { ThemedText } from './ThemedText';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useTheme } from '@/contexts/ThemeContext';
+import React from 'react';
+import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { LANGUAGE_EMOJIS } from './language-emojis';
+import { ThemedText } from './ThemedText';
 
 interface LessonHeaderProps {
     title: string;
@@ -27,7 +27,7 @@ export function LessonHeader({
     })
 }: LessonHeaderProps) {
     const { isDark, colors } = useTheme();
-    const emoji = languageName && LANGUAGE_EMOJIS[languageName] ? LANGUAGE_EMOJIS[languageName] : '🏳️‍🌈';
+    const emoji = languageName && LANGUAGE_EMOJIS[languageName] ? LANGUAGE_EMOJIS[languageName] : '🇿🇦';
 
     return (
         <View style={[styles.headerWrapper, { backgroundColor: colors.card }]}>

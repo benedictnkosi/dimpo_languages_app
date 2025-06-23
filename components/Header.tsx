@@ -1,11 +1,11 @@
-import { StyleSheet, View, Image, TouchableOpacity, ImageSourcePropType, Platform, useColorScheme } from 'react-native';
-import { ThemedText } from './ThemedText';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { useState, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import { HOST_URL } from '@/config/api';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { useEffect, useState } from 'react';
+import { Image, ImageSourcePropType, StyleSheet, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ThemedText } from './ThemedText';
 
 const avatarImages: Record<string, ImageSourcePropType> = {
   '1': require('../assets/images/avatars/1.png'),

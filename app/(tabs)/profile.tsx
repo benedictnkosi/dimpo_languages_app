@@ -1,30 +1,33 @@
+import { UpgradeToProButton } from '@/app/components/UpgradeToProButton';
+import { Header } from '@/components/Header';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { HOST_URL } from '@/config/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import * as FileSystem from 'expo-file-system';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { ThemedView } from '@/components/ThemedView';
-import { ThemedText } from '@/components/ThemedText';
-import { useState, useEffect } from 'react';
-import Toast from 'react-native-toast-message';
-import Modal from 'react-native-modal';
-import { LessonHeader } from '@/components/LessonHeader';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { View, TouchableOpacity, ScrollView, TextInput, Platform, StyleSheet, Linking } from 'react-native';
-import React from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { HOST_URL } from '@/config/api';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import Modal from 'react-native-modal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
+import { Paywall } from '../components/Paywall';
+import { useSound } from '../contexts/SoundContext';
 
 interface ProfileInfo {
   name: string;
   email?: string;
+  subscription?: 'free' | 'premium';
 }
 
 export default function ProfileScreen() {
   const { user } = useAuth();
   const { signOut } = useAuth();
   const { colors, isDark } = useTheme();
+  const { soundEnabled, toggleSound } = useSound();
   const [profileInfo, setProfileInfo] = useState<ProfileInfo | null>(null);
   const [editName, setEditName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -39,41 +42,37 @@ export default function ProfileScreen() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isClearingCache, setIsClearingCache] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const fetchLearnerData = async () => {
+    try {
+      const authData = await SecureStore.getItemAsync('auth');
+      if (!authData) {
+        throw new Error('No auth data found');
+      }
+      const { user } = JSON.parse(authData);
+
+      const response = await fetch(`${HOST_URL}/api/language-learners/uid/${user.uid}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch learner data');
+      }
+
+      const learnerData = await response.json();
+      setProfileInfo({
+        name: learnerData.name,
+        email: user?.email || '',
+        subscription: learnerData.subscription || 'free'
+      });
+      setEditName(learnerData.name);
+
+      console.log('subscription', learnerData.subscription);
+    } catch (error) {
+      console.error('Error fetching learner data:', error);
+    }
+  };
 
   useEffect(() => {
-    async function fetchLearnerData() {
-      try {
-        const authData = await SecureStore.getItemAsync('auth');
-        if (!authData) {
-          throw new Error('No auth data found');
-        }
-        const { user } = JSON.parse(authData);
-
-        const response = await fetch(`${HOST_URL}/api/language-learners/uid/${user.uid}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch learner data');
-        }
-
-        const learnerData = await response.json();
-        setProfileInfo({
-          name: learnerData.name,
-          email: user?.email || ''
-        });
-        setEditName(learnerData.name);
-      } catch (error) {
-        console.error('Error fetching learner data:', error);
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: 'Failed to load profile data',
-          position: 'top',
-          topOffset: 60,
-          visibilityTime: 3000,
-          autoHide: true
-        });
-      }
-    }
-
     fetchLearnerData();
   }, [user?.email]);
 
@@ -183,6 +182,44 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleClearCache = async () => {
+    setIsClearingCache(true);
+    try {
+        console.log('Clearing cached resources...');
+        const audioDir = `${FileSystem.documentDirectory}audio`;
+        const imageDir = `${FileSystem.documentDirectory}image`;
+
+        const audioDirInfo = await FileSystem.getInfoAsync(audioDir);
+        if (audioDirInfo.exists) {
+            await FileSystem.deleteAsync(audioDir, { idempotent: true });
+            console.log('Cleared audio cache.');
+        }
+
+        const imageDirInfo = await FileSystem.getInfoAsync(imageDir);
+        if (imageDirInfo.exists) {
+            await FileSystem.deleteAsync(imageDir, { idempotent: true });
+            console.log('Cleared image cache.');
+        }
+        
+        Toast.show({
+            type: 'success',
+            text1: 'Cache cleared successfully',
+            position: 'bottom'
+        });
+
+    } catch (error) {
+        console.error('Error clearing cache:', error);
+        Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: 'Failed to clear cache',
+            position: 'bottom'
+        });
+    } finally {
+        setIsClearingCache(false);
+    }
+  };
+
   return (
     <LinearGradient
       colors={isDark ? ['#1E1E1E', '#121212'] : ['#FFFFFF', '#F8FAFC', '#F1F5F9']}
@@ -195,18 +232,11 @@ export default function ProfileScreen() {
         nestedScrollEnabled={true}
         keyboardShouldPersistTaps="handled"
       >
-        <LessonHeader title="Profile" />
+        <Header/>
 
         <ThemedView style={styles.content}>
           <ThemedView style={[styles.profileCard, { backgroundColor: isDark ? colors.card : '#FFFFFF' }]}>
-            <View style={styles.profileCardHeader}>
-              <TouchableOpacity
-                style={[styles.closeButton, { backgroundColor: isDark ? colors.surface : '#F8FAFC' }]}
-                onPress={() => router.back()}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
+            
             <View style={styles.editForm}>
               <View style={styles.inputGroup}>
                 <ThemedText style={[styles.label, { color: colors.text }]}>Name</ThemedText>
@@ -242,6 +272,62 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </ThemedView>
+
+          {/* Sound Settings Card */}
+          <ThemedView style={[styles.settingsCard, { backgroundColor: isDark ? colors.card : '#FFFFFF' }]}>
+            <ThemedText style={[styles.settingsTitle, { color: colors.text }]}>
+              🔊 Sound Settings
+            </ThemedText>
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <ThemedText style={[styles.settingLabel, { color: colors.text }]}>
+                  Play Sound Effects
+                </ThemedText>
+                <ThemedText style={[styles.settingDescription, { color: colors.textSecondary }]}>
+                  Hear feedback sounds when answering questions
+                </ThemedText>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  {
+                    backgroundColor: soundEnabled ? colors.primary : isDark ? colors.surface : '#E5E7EB',
+                    borderColor: colors.border,
+                  }
+                ]}
+                onPress={toggleSound}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: soundEnabled }}
+                accessibilityLabel={`Sound effects ${soundEnabled ? 'enabled' : 'disabled'}`}
+              >
+                <View
+                  style={[
+                    styles.toggleThumb,
+                    {
+                      backgroundColor: '#FFFFFF',
+                      transform: [{ translateX: soundEnabled ? 20 : 0 }],
+                    }
+                  ]}
+                />
+              </TouchableOpacity>
+            </View>
+          </ThemedView>
+
+          {/* Show Upgrade to Pro button for free users */}
+          {profileInfo?.subscription === 'free' && (
+            <ThemedView style={[styles.upgradeCard, { backgroundColor: isDark ? colors.card : '#FFFFFF' }]}>
+              <ThemedText style={[styles.upgradeTitle, { color: colors.text }]}>
+                ✨ Unlock Premium Features
+              </ThemedText>
+              <ThemedText style={[styles.upgradeDescription, { color: colors.textSecondary }]}>
+                Get unlimited access to all lessons, advanced analytics, and more!
+              </ThemedText>
+              <UpgradeToProButton
+                style={styles.upgradeButton}
+                onPress={() => setShowPaywall(true)}
+              />
+            </ThemedView>
+          )}
         </ThemedView>
 
         <ThemedView style={styles.signOutContainer}>
@@ -251,7 +337,7 @@ export default function ProfileScreen() {
                 styles.actionButton,
                 { backgroundColor: isDark ? colors.surface : '#F8FAFC', borderColor: colors.border },
               ]}
-              onPress={() => router.back()}
+              onPress={() => router.push('/(tabs)')}
               disabled={isLoggingOut}
             >
               <ThemedText style={[styles.actionButtonText, { color: colors.text }]}>
@@ -278,6 +364,23 @@ export default function ProfileScreen() {
             style={[
               styles.deleteAccountButton,
               {
+                backgroundColor: isDark ? colors.surface : '#F1F5F9',
+                borderColor: isDark ? colors.border : '#E2E8F0',
+              },
+              (isClearingCache || isLoggingOut) && styles.buttonDisabled
+            ]}
+            onPress={handleClearCache}
+            disabled={isClearingCache || isLoggingOut}
+          >
+            <ThemedText style={[styles.deleteAccountText, { color: isDark ? colors.textSecondary : '#475569' }]}>
+              {isClearingCache ? 'Clearing...' : 'Clear Downloaded Resources'}
+            </ThemedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.deleteAccountButton,
+              {
                 backgroundColor: isDark ? colors.surface : '#FEE2E2',
                 borderColor: '#DC2626'
               },
@@ -292,6 +395,17 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </ThemedView>
       </ScrollView>
+
+      {showPaywall && (
+        <Paywall
+          onSuccess={() => {
+            setShowPaywall(false);
+            // Refresh profile data after successful upgrade
+            fetchLearnerData();
+          }}
+          onClose={() => setShowPaywall(false)}
+        />
+      )}
 
       <Modal
         isVisible={showDeleteModal}
@@ -570,5 +684,87 @@ const styles = StyleSheet.create({
   },
   paperButtonDisabled: {
     opacity: 0.5,
+  },
+  upgradeCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  upgradeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  upgradeDescription: {
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  upgradeButton: {
+    marginHorizontal: 0,
+    marginVertical: 0,
+  },
+  settingsCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  settingsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingInfo: {
+    flex: 1,
+  },
+  settingLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  settingDescription: {
+    fontSize: 14,
+  },
+  toggleButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 8,
+    width: 48,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  toggleButtonDisabled: {
+    opacity: 0.5,
+  },
+  toggleButtonChecked: {
+    backgroundColor: '#DC2626',
+  },
+  toggleThumbChecked: {
+    transform: [{ translateX: 20 }],
   },
 }); 

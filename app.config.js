@@ -16,7 +16,8 @@ export default {
       "ITSAppUsesNonExemptEncryption": false,
       "UIBackgroundModes": ["remote-notification"]
     },
-    "associatedDomains": ["applinks:examquiz.co.za"]
+    "associatedDomains": ["applinks:examquiz.co.za"],
+    "storeKitConfiguration": "./ios/DimpoLanguages/Configuration.storekit"
   },
   android: {
     package: 'com.dimpolanguages',
@@ -34,7 +35,7 @@ export default {
         "category": ["BROWSABLE", "DEFAULT"]
       }
     ],
-    versionCode: 1,
+    versionCode: 2,
     adaptiveIcon: {
       foregroundImage: './assets/images/adaptive-icon.png',
       backgroundColor: '#ffffff',
@@ -93,9 +94,7 @@ export default {
     googlePlacesApiKey: process.env.GOOGLE_PLACES_API_KEY || "AIzaSyCaJHGdAh4f7BRJxNDRNkJ_vrrG74Ur_jA"
   },
   owner: 'nkosib',
-  runtimeVersion: {
-    policy: 'appVersion'
-  },
+  runtimeVersion: '1.0.0',
   updates: {
     url: 'https://u.expo.dev/b4f9ab87-947e-4014-8990-0c11fa29cb2c'
   }

@@ -22,4 +22,6 @@ export function ThemedText({ style, children, ...props }: ThemedTextProps) {
             {children}
         </Text>
     );
-} 
+}
+
+export default ThemedText; 

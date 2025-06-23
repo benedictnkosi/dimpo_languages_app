@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
-import { Audio } from 'expo-av';
 import { ThemedText } from '@/components/ThemedText';
-import { useTheme } from '@/contexts/ThemeContext';
 import { HOST_URL } from '@/config/api';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Audio } from 'expo-av';
+import React, { useMemo } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 interface Word {
     id: number;
@@ -40,8 +40,18 @@ export function WordSelectionOptions({
         return words.find(w => w.id === Number(id));
     }
 
-    // Filter out already selected words
-    const filteredOptions = options.filter((id) => {
+    // Create a stable shuffled array that only gets created once
+    const shuffledOptions = useMemo(() => {
+        const shuffled = [...options];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }, [options]); // Only depend on options, not filteredOptions
+
+    // Filter out already selected words from the stable shuffled array
+    const availableOptions = shuffledOptions.filter((id) => {
         if (selectedWordIds.includes(Number(id))) return false;
         const word = getWordById(id);
         if (!word) return false;
@@ -50,16 +60,6 @@ export function WordSelectionOptions({
             : word.translations['en'];
         return !!text && text.trim().length > 0;
     });
-
-    // Shuffle the available options
-    const availableOptions = useMemo(() => {
-        const shuffled = [...filteredOptions];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        return shuffled;
-    }, [filteredOptions]);
 
     async function handleSelectOption(id: string | number) {
         const word = getWordById(id);
@@ -185,4 +185,6 @@ const styles = StyleSheet.create({
         marginHorizontal: 8,
         alignSelf: 'stretch',
     },
-}); 
+});
+
+export default WordSelectionOptions; 

@@ -1,12 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, StyleSheet, Pressable, TextInput, Keyboard } from 'react-native';
-import { Audio } from 'expo-av';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { FeedbackMessage, FeedbackButton } from './CheckContinueButton';
+import { useTheme } from '@/contexts/ThemeContext';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Keyboard, StyleSheet, TextInput } from 'react-native';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { AudioPlayer } from './AudioPlayer';
-import { useTheme } from '@/contexts/ThemeContext';
 
 interface Word {
     id: number;
@@ -17,7 +15,6 @@ interface Word {
 
 interface CompleteTranslationQuestionProps {
     words: Word[];
-    options: (string | number)[];
     selectedLanguage: string;
     blankIndex: number;
     questionId: string | number;
@@ -28,7 +25,6 @@ interface CompleteTranslationQuestionProps {
 
 export function CompleteTranslationQuestion({
     words,
-    options,
     selectedLanguage,
     blankIndex,
     questionId,
@@ -36,34 +32,30 @@ export function CompleteTranslationQuestion({
     setOnContinue,
     setIsQuestionAnswered,
 }: CompleteTranslationQuestionProps) {
+    if (!Array.isArray(words)) {
+        return <ThemedText>Question data is missing.</ThemedText>;
+    }
+
     const [userInput, setUserInput] = useState('');
     const { setFeedback, resetFeedback, isChecked } = useFeedback();
     const theme = useTheme();
 
-    // Get all words and their translations
-    const correctWords = useMemo(() =>
-        options
-            .map(optionId => words.find(w => w.id === Number(optionId)))
-            .filter((word): word is Word => word !== undefined),
-        [options, words]
-    );
-
-    const correctAnswer = correctWords[blankIndex]?.translations[selectedLanguage] || '';
+    const correctAnswer = words[blankIndex]?.translations[selectedLanguage] || '';
 
     const audioUris = useMemo(() =>
-        correctWords.map(word => word.audio[selectedLanguage]).filter(Boolean),
-        [correctWords, selectedLanguage]
+        words.map(word => word.audio[selectedLanguage]).filter(Boolean),
+        [words, selectedLanguage]
     );
 
     // Create the sentence with blank or user input
     const sentenceParts = useMemo(() =>
-        correctWords.map((word, index) => {
+        words.map((word, index) => {
             if (index === blankIndex) {
                 return userInput || '_____';
             }
             return word.translations[selectedLanguage];
         }),
-        [correctWords, blankIndex, userInput, selectedLanguage]
+        [words, blankIndex, userInput, selectedLanguage]
     );
 
     const sentence = sentenceParts.join(' ');
@@ -88,7 +80,7 @@ export function CompleteTranslationQuestion({
         const isAnswerCorrect = userInput.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
 
         // Create the correct sentence by replacing the blank with the correct answer
-        const correctSentence = correctWords.map((word, index) => {
+        const correctSentence = words.map((word, index) => {
             if (index === blankIndex) {
                 return correctAnswer;
             }

@@ -1,25 +1,23 @@
-import { useEffect, useState, useRef } from 'react';
-import { StyleSheet, Pressable, ActivityIndicator, ScrollView, View, Modal, Animated } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { LessonHeader } from '@/components/LessonHeader';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { HOST_URL } from '@/config/api';
-import { LessonHeader } from '@/components/LessonHeader';
-import { SelectImageQuestion } from './components/SelectImageQuestion';
-import { MatchPairsQuestion } from './components/MatchPairsQuestion';
-import { TranslateQuestion } from './components/TranslateQuestion';
-import * as SecureStore from 'expo-secure-store';
-import * as FileSystem from 'expo-file-system';
-import { TapWhatYouHearQuestion } from './components/TapWhatYouHearQuestion';
-import { FillInBlankQuestion } from './components/FillInBlankQuestion';
-import { TypeWhatYouHearQuestion } from './components/TypeWhatYouHearQuestion';
-import { CompleteTranslationQuestion } from './components/CompleteTranslationQuestion';
-import { FeedbackProvider } from './contexts/FeedbackContext';
-import { FeedbackMessage, FeedbackButton } from './components/CheckContinueButton';
-import { useFeedback } from './contexts/FeedbackContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { InteractionManager } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, InteractionManager, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { FeedbackButton, FeedbackMessage } from './components/CheckContinueButton';
+import { CompleteTranslationQuestion } from './components/CompleteTranslationQuestion';
+import { FillInBlankQuestion } from './components/FillInBlankQuestion';
+import { MatchPairsQuestion } from './components/MatchPairsQuestion';
+import { SelectImageQuestion } from './components/SelectImageQuestion';
+import { TapWhatYouHearQuestion } from './components/TapWhatYouHearQuestion';
+import { TranslateQuestion } from './components/TranslateQuestion';
+import { TypeMissingWordQuestion } from './components/TypeMissingWordQuestion';
+import { TypeWhatYouHearQuestion } from './components/TypeWhatYouHearQuestion';
+import { FeedbackProvider, useFeedback } from './contexts/FeedbackContext';
 
 interface Word {
     id: number;
@@ -34,7 +32,7 @@ interface Question {
     options: string[];
     correctOption: number | null;
     questionOrder: number;
-    type: 'select_image' | 'tap_what_you_hear' | 'match_pairs' | 'type_what_you_hear' | 'fill_in_blank' | 'complete_translation' | 'translate';
+    type: 'select_image' | 'tap_what_you_hear' | 'match_pairs' | 'type_what_you_hear' | 'fill_in_blank' | 'complete_translation' | 'translate' | 'type_missing_word';
     blankIndex: number | null;
     sentenceWords: string[] | null;
     direction: string | null;
@@ -266,6 +264,7 @@ function LessonContent() {
             color: colors.success,
             marginBottom: 16,
             textAlign: 'center',
+            lineHeight: 40,
         },
         celebrationSubtitle: {
             fontSize: 20,
@@ -514,9 +513,12 @@ function LessonContent() {
 
     useEffect(() => {
         async function fetchQuestions() {
+            console.log('[Lesson] fetchQuestions called', { lessonId, languageCode });
             try {
                 const response = await fetch(`${HOST_URL}/api/language-questions/lesson/${lessonId}/language/${languageCode}`);
+                console.log('[Lesson] fetchQuestions response status:', response.status);
                 const data = await response.json();
+                console.log('[Lesson] fetchQuestions data:', data);
                 // Sort questions by questionOrder
                 const sortedQuestions = data.sort((a: Question, b: Question) => a.questionOrder - b.questionOrder);
                 setQuestions(sortedQuestions);
@@ -527,12 +529,15 @@ function LessonContent() {
                     if (unitId && languageCode) {
                         const downloaded = await areResourcesDownloaded(unitId, languageCode as string);
                         setAreResourcesDownloadedState(downloaded);
+                        console.log('[Lesson] areResourcesDownloaded:', downloaded);
                     }
                 }
             } catch (err) {
+                console.error('[Lesson] fetchQuestions error:', err);
                 setError("Sorry, we couldn't load your lesson questions. Please check your internet connection or try again shortly.");
             } finally {
                 setIsLoading(false);
+                console.log('[Lesson] fetchQuestions finished, setIsLoading(false)');
             }
         }
         fetchQuestions();
@@ -627,7 +632,6 @@ function LessonContent() {
                         options={question.options}
                         correctOption={question.correctOption}
                         selectedLanguage={languageCode as string}
-                        areResourcesDownloaded={areResourcesDownloadedState}
                         questionId={String(question.id)}
                         setOnCheck={fn => { checkRef.current = fn; }}
                         setOnContinue={fn => { continueRef.current = fn; }}
@@ -655,7 +659,6 @@ function LessonContent() {
                         words={question.words || []}
                         selectedLanguage={languageCode as string}
                         areResourcesDownloaded={areResourcesDownloadedState}
-                        onCheck={handleContinue}
                         matchType={question.matchType}
                         questionId={String(question.id)}
                         setOnCheck={fn => { checkRef.current = fn; }}
@@ -680,9 +683,14 @@ function LessonContent() {
             case 'fill_in_blank':
                 return (
                     <FillInBlankQuestion
-                        words={question.words || []}
+                        words={(question.words || []).map(w => ({
+                            ...w,
+                            audio: Object.fromEntries(
+                                Object.entries(w.audio || {}).map(([lang, val]) => [lang, Array.isArray(val) ? val : [val]])
+                            )
+                        }))}
                         sentenceWords={question.sentenceWords || []}
-                        options={question.options}
+                        options={question.options || []}
                         blankIndex={question.blankIndex ?? 0}
                         selectedLanguage={languageCode as string}
                         questionId={String(question.id)}
@@ -696,7 +704,6 @@ function LessonContent() {
                 return (
                     <CompleteTranslationQuestion
                         words={question.words || []}
-                        options={question.options}
                         selectedLanguage={languageCode as string}
                         blankIndex={question.blankIndex ?? 0}
                         questionId={String(question.id)}
@@ -720,6 +727,29 @@ function LessonContent() {
                         setIsQuestionAnswered={setIsQuestionAnswered}
                     />
                 );
+
+            case 'type_missing_word': {
+                // Map words to match the expected structure for TypeMissingWordQuestion
+                const mappedWords = (question.words || []).map(w => ({
+                    ...w,
+                    audio: Object.fromEntries(
+                        Object.entries(w.audio || {}).map(([lang, val]) => [lang, Array.isArray(val) ? val : [val]])
+                    )
+                }));
+                return (
+                    <TypeMissingWordQuestion
+                        words={mappedWords}
+                        sentenceWords={question.sentenceWords || []}
+                        options={question.options || []}
+                        blankIndex={question.blankIndex ?? 0}
+                        selectedLanguage={languageCode as string}
+                        questionId={String(question.id)}
+                        setOnCheck={fn => { checkRef.current = fn; }}
+                        setOnContinue={fn => { continueRef.current = fn; }}
+                        setIsQuestionAnswered={setIsQuestionAnswered}
+                    />
+                );
+            }
 
             default:
                 return null;
@@ -840,31 +870,42 @@ function LessonContent() {
     // CelebrationScreen moved inside LessonContent to access incrementPoints
     function CelebrationScreen() {
         useEffect(() => {
-            // Increment points and update lesson progress when the celebration screen is shown
-            incrementPoints();
-            updateLessonProgress();
-        }, []);
+            if (showCelebration) {
+                // Increment points and update lesson progress when the celebration screen is shown
+                incrementPoints();
+                updateLessonProgress();
+            }
+        }, [showCelebration]);
 
         const handleContinue = () => {
             router.back();
         };
 
         return (
-            <ThemedView style={styles.celebrationContainer}>
-                <ThemedText style={styles.celebrationTitle}>🎉 Congratulations! 🎉</ThemedText>
-                <ThemedText style={styles.celebrationSubtitle}>You've completed the lesson!</ThemedText>
-                <ThemedText style={styles.celebrationPoints}>+10 points</ThemedText>
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.continueButton,
-                        pressed && styles.continueButtonPressed
-                    ]}
-                    onPress={handleContinue}
-                    accessibilityRole="button"
-                >
-                    <ThemedText style={styles.continueButtonText}>Continue Learning</ThemedText>
-                </Pressable>
-            </ThemedView>
+            <Modal
+                visible={showCelebration}
+                transparent
+                animationType="fade"
+                onRequestClose={handleContinue}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.streakCelebrationContainer}>
+                        <ThemedText style={styles.celebrationTitle}>🎉 Congratulations! 🎉</ThemedText>
+                        <ThemedText style={styles.celebrationSubtitle}>You've completed the lesson!</ThemedText>
+                        <ThemedText style={styles.celebrationPoints}>+10 points</ThemedText>
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.continueButton,
+                                pressed && styles.continueButtonPressed
+                            ]}
+                            onPress={handleContinue}
+                            accessibilityRole="button"
+                        >
+                            <ThemedText style={styles.continueButtonText}>Continue Learning</ThemedText>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
         );
     }
 
@@ -890,9 +931,7 @@ function LessonContent() {
                 <View style={styles.errorContainer}>
                     <ThemedText style={styles.errorText}>{error}</ThemedText>
                 </View>
-            ) : showCelebration ? (
-                <CelebrationScreen />
-            ) : showReview ? (
+            ) : showReview && !showCelebration ? (
                 <ReviewSection
                     onRetry={handleRetry}
                 />
@@ -923,6 +962,7 @@ function LessonContent() {
                 </SafeAreaView>
             )}
             <StreakCelebration />
+            <CelebrationScreen />
             <Modal
                 visible={showQuitModal}
                 transparent={true}

@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TextInput, Keyboard } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useTheme } from '@/contexts/ThemeContext';
+import React, { useEffect, useState } from 'react';
+import { Keyboard, StyleSheet, TextInput } from 'react-native';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { AudioPlayer } from './AudioPlayer';
-import { useTheme } from '@/contexts/ThemeContext';
 
 interface Word {
     id: number;
@@ -24,7 +24,7 @@ interface TypeWhatYouHearQuestionProps {
 
 export function TypeWhatYouHearQuestion({
     words,
-    options,
+    options = [],
     selectedLanguage,
     questionId,
     setOnCheck,
@@ -35,6 +35,14 @@ export function TypeWhatYouHearQuestion({
     const { setFeedback, resetFeedback } = useFeedback();
     const { colors, isDark } = useTheme()
     const [autoPlay, setAutoPlay] = React.useState(true);
+
+    // Disable auto-play after 3 seconds on page load
+    useEffect(() => {
+        setAutoPlay(true); // Reset autoPlay to true for each new question
+        setTimeout(() => {
+            setAutoPlay(false);
+        }, 3000);
+    }, [questionId]); // Add questionId as dependency to reset autoPlay for each new question
 
     // Get all correct words and concatenate their translations
     const correctWords = options
@@ -127,4 +135,6 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         textAlign: 'center',
     },
-}); 
+});
+
+export default TypeWhatYouHearQuestion; 

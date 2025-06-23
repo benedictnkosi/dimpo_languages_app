@@ -22,4 +22,6 @@ export function ThemedView({ style, children, ...props }: ThemedViewProps) {
             {children}
         </View>
     );
-} 
+}
+
+export default ThemedView; 

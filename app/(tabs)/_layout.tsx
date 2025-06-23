@@ -1,9 +1,8 @@
+import { useTheme } from '@/contexts/ThemeContext';
+import { DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, View, Text } from 'react-native';
-import { useColorScheme } from 'react-native';
-import { DarkTheme, DefaultTheme } from '@react-navigation/native';
-import { useTheme } from '@/contexts/ThemeContext';
+import { Platform, Text, useColorScheme } from 'react-native';
 
 import { HapticTab } from '../../components/HapticTab';
 import TabBarBackground from '../../components/ui/TabBarBackground';
@@ -40,6 +39,15 @@ export default function TabLayout() {
           backgroundColor: theme.colors.background,
         },
       }}>
+        <Tabs.Screen
+        name="scoreboard"
+        options={{
+          title: 'Leaderboard',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 24 }}>🏆</Text>
+          ),
+        }}
+      />
       <Tabs.Screen
         name="index"
         options={{
@@ -49,15 +57,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="scoreboard"
-        options={{
-          title: 'Leaderboard',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 24 }}>🏆</Text>
-          ),
-        }}
-      />
+      
       <Tabs.Screen
         name="profile"
         options={{

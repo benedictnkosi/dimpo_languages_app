@@ -1,10 +1,10 @@
-import React from 'react';
-import { View, StyleSheet, Modal, Image, Animated, TouchableOpacity, Share } from 'react-native';
-import { ThemedText } from './ThemedText';
+import { badgeImages } from '@/constants/badges';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Badge } from '@/services/api';
-import { badgeImages } from '@/constants/badges';
 import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
+import { Animated, Image, Modal, Share, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ThemedText } from './ThemedText';
 
 interface BadgeCelebrationModalProps {
     isVisible: boolean;

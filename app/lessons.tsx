@@ -1,18 +1,18 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { StyleSheet, Pressable, ActivityIndicator, ScrollView, View, Animated } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { Paywall } from '@/app/components/Paywall';
+import { UpgradeToProButton } from '@/app/components/UpgradeToProButton';
+import { LessonHeader } from '@/components/LessonHeader';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { HOST_URL } from '@/config/api';
-import { LessonHeader } from '@/components/LessonHeader';
-import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import * as FileSystem from 'expo-file-system';
-import type { DownloadProgressData } from 'expo-file-system';
-import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Lesson {
@@ -51,16 +51,18 @@ interface UnitResources {
 interface DownloadProgress {
     total: number;
     completed: number;
-    currentFile?: {
-        name: string;
-        progress: number;
-    };
 }
 
 // Add new interface for tracking current unit
 interface CurrentUnit {
     id: number;
     lastAccessed: Date;
+}
+
+// Add interface for daily lesson tracking
+interface DailyLessonCount {
+    count: number;
+    date: string; // ISO date string (YYYY-MM-DD)
 }
 
 interface Learner {
@@ -99,10 +101,79 @@ export default function LessonsScreen() {
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
     const [currentUnit, setCurrentUnit] = useState<CurrentUnit | null>(null);
     const [learner, setLearner] = useState<Learner | null>(null);
+    const [dailyLessonCount, setDailyLessonCount] = useState<DailyLessonCount>({ count: 0, date: '' });
+    const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
     const router = useRouter();
     const [showScrollTop, setShowScrollTop] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
     const fadeAnim = useRef(new Animated.Value(0)).current;
+    const [showPaywall, setShowPaywall] = useState(false);
+
+    // Function to get today's date in YYYY-MM-DD format
+    const getTodayString = (): string => {
+        return new Date().toISOString().split('T')[0];
+    };
+
+    // Function to check and update daily lesson count
+    const checkDailyLessonLimit = useCallback(async () => {
+        if (learner?.subscription !== 'free') {
+            return { canTakeLesson: true, remainingLessons: -1 };
+        }
+
+        const today = getTodayString();
+        
+        // Check if we need to reset the daily count (new day)
+        if (dailyLessonCount.date !== today) {
+            setDailyLessonCount({ count: 0, date: today });
+            return { canTakeLesson: true, remainingLessons: 3 };
+        }
+
+        const remainingLessons = 3 - dailyLessonCount.count;
+        return { canTakeLesson: remainingLessons > 0, remainingLessons };
+    }, [learner?.subscription, dailyLessonCount]);
+
+    // Function to increment daily lesson count
+    const incrementDailyLessonCount = useCallback(async () => {
+        if (learner?.subscription !== 'free') {
+            return;
+        }
+
+        const today = getTodayString();
+        const newCount = dailyLessonCount.date === today ? dailyLessonCount.count + 1 : 1;
+        setDailyLessonCount({ count: newCount, date: today });
+
+        // Store in secure storage for persistence
+        try {
+            await SecureStore.setItemAsync('dailyLessonCount', JSON.stringify({ count: newCount, date: today }));
+        } catch (error) {
+            console.error('[App] Error saving daily lesson count:', error);
+        }
+    }, [learner?.subscription, dailyLessonCount]);
+
+    // Function to load daily lesson count from storage
+    const loadDailyLessonCount = useCallback(async () => {
+        try {
+            const stored = await SecureStore.getItemAsync('dailyLessonCount');
+            if (stored) {
+                const parsed: DailyLessonCount = JSON.parse(stored);
+                const today = getTodayString();
+                
+                // Reset count if it's a new day
+                if (parsed.date !== today) {
+                    setDailyLessonCount({ count: 0, date: today });
+                } else {
+                    setDailyLessonCount(parsed);
+                }
+            }
+        } catch (error) {
+            console.error('[App] Error loading daily lesson count:', error);
+        }
+    }, []);
+
+    // Load daily lesson count on component mount
+    useEffect(() => {
+        loadDailyLessonCount();
+    }, [loadDailyLessonCount]);
 
     // Function to fetch learner data
     const fetchLearner = useCallback(async () => {
@@ -148,11 +219,6 @@ export default function LessonsScreen() {
             return false;
         }
 
-        if (learner?.subscription === 'free' && unitId !== units[0]?.id) {
-            console.log('[isUnitLocked] Free user, locking unit:', unitId);
-            return true;
-        }
-
         const prevUnit = units.find(u => u.unitOrder === unit.unitOrder - 1);
         if (!prevUnit) {
             console.log('[isUnitLocked] Previous unit not found for unit:', unitId);
@@ -172,6 +238,26 @@ export default function LessonsScreen() {
     // Function to determine if a lesson is locked
     const isLessonLocked = (unitId: number, lessonId: number): boolean => {
         console.log('[isLessonLocked] Checking lesson:', lessonId, 'in unit:', unitId);
+        
+        // Check for free member restrictions - lock unit 3 lesson 2 and onwards
+        if (learner?.subscription === 'free') {
+            const unit = units.find(u => u.id === unitId);
+            if (unit && unit.unitOrder >= 3) {
+                const lesson = unit.lessons.find(l => l.id === lessonId);
+                if (lesson && lesson.lessonOrder >= 2) {
+                    console.log('[isLessonLocked] Free user - locking unit 3 lesson 2 and onwards:', unitId, lessonId);
+                    return true;
+                }
+            }
+
+            // Check daily lesson limit for free users
+            const today = getTodayString();
+            if (dailyLessonCount.date === today && dailyLessonCount.count >= 3) {
+                console.log('[isLessonLocked] Free user - daily lesson limit reached:', dailyLessonCount.count);
+                return true;
+            }
+        }
+        
         // If the unit is locked, all its lessons are locked
         const unitLocked = isUnitLocked(unitId);
         console.log('[isLessonLocked] Unit locked:', unitLocked);
@@ -258,8 +344,7 @@ export default function LessonsScreen() {
                 setDownloadedResources(prev => new Set([...prev, resourceName]));
                 setDownloadProgress(prev => prev ? {
                     ...prev,
-                    completed: prev.completed + 1,
-                    currentFile: undefined
+                    completed: prev.completed + 1
                 } : null);
                 return;
             }
@@ -275,16 +360,7 @@ export default function LessonsScreen() {
             const downloadResumable = FileSystem.createDownloadResumable(
                 endpoint,
                 fileUri,
-                {},
-                (progress) => {
-                    setDownloadProgress(prev => prev ? {
-                        ...prev,
-                        currentFile: {
-                            name: resourceName,
-                            progress: progress.totalBytesWritten / progress.totalBytesExpectedToWrite
-                        }
-                    } : null);
-                }
+                {}
             );
 
             const downloadResult = await downloadResumable.downloadAsync();
@@ -299,8 +375,7 @@ export default function LessonsScreen() {
                 setDownloadedResources(prev => new Set([...prev, resourceName]));
                 setDownloadProgress(prev => prev ? {
                     ...prev,
-                    completed: prev.completed + 1,
-                    currentFile: undefined
+                    completed: prev.completed + 1
                 } : null);
             } else {
                 console.error(`[Resource] Failed to download ${type} ${resourceName} - Status: ${downloadResult.status}`);
@@ -370,6 +445,7 @@ export default function LessonsScreen() {
             if (progressResponse.ok) {
                 const progress: LessonProgress[] = await progressResponse.json();
                 console.log(`[App] Fetched progress for ${progress.length} lessons`);
+                console.log('progress data', progress);
                 setLearnerProgress(progress);
                 return progress;
             } else if (progressResponse.status !== 404) {
@@ -524,6 +600,16 @@ export default function LessonsScreen() {
 
     // Modify handleLessonPress to handle unit changes
     const handleLessonPress = async (lesson: Lesson) => {
+        // Check daily lesson limit for free users
+        if (learner?.subscription === 'free') {
+            const { canTakeLesson } = await checkDailyLessonLimit();
+            if (!canTakeLesson) {
+                console.log('[App] Free user - daily lesson limit reached');
+                setShowDailyLimitModal(true);
+                return;
+            }
+        }
+
         // Check if we're switching units
         if (currentUnit && currentUnit.id !== lesson.unitId) {
             console.log(`[App] Switching from unit ${currentUnit.id} to unit ${lesson.unitId}`);
@@ -554,6 +640,9 @@ export default function LessonsScreen() {
                 // Continue with navigation even if download fails
             }
         }
+
+        // Increment daily lesson count for free users
+        await incrementDailyLessonCount();
 
         // Rest of the existing handleLessonPress code...
         try {
@@ -649,6 +738,11 @@ export default function LessonsScreen() {
 
         const { icon, color, label } = LESSON_STATUS[status];
 
+        // Check if this lesson is locked due to daily limit
+        const isDailyLimitLocked = learner?.subscription === 'free' && 
+            dailyLessonCount.date === getTodayString() && 
+            dailyLessonCount.count >= 3;
+
         // Theme-aware colors
         const cardBg = locked
             ? (isDark ? colors.surfaceHigh : '#f1f5f9')
@@ -681,7 +775,10 @@ export default function LessonsScreen() {
                     {lesson.title}
                 </ThemedText>
                 <ThemedText style={[styles.lessonStatus, { color: statusCol }]}>
-                    {locked ? 'Locked' : (status === 'not_started' ? 'Continue' : label)}
+                    {locked 
+                        ? (isDailyLimitLocked ? 'Daily limit reached' : 'Locked') 
+                        : (status === 'not_started' ? 'Continue' : label)
+                    }
                 </ThemedText>
             </Pressable>
         );
@@ -697,6 +794,17 @@ export default function LessonsScreen() {
         level: number;
     }) {
         const percent = total > 0 ? completed / total : 0;
+        const [dailyLimitInfo, setDailyLimitInfo] = useState<{ remainingLessons: number }>({ remainingLessons: -1 });
+        
+        // Check daily limit on component mount and when learner changes
+        useEffect(() => {
+            const checkLimit = async () => {
+                const result = await checkDailyLessonLimit();
+                setDailyLimitInfo({ remainingLessons: result.remainingLessons });
+            };
+            checkLimit();
+        }, [learner?.subscription, dailyLessonCount]);
+        
         return (
             <View style={styles.progressCard}>
                 <View style={styles.progressCardHeader}>
@@ -712,13 +820,27 @@ export default function LessonsScreen() {
                 <ThemedText style={styles.progressCardSubtext}>
                     {completed} of {total} levels completed
                 </ThemedText>
+                {learner?.subscription === 'free' && dailyLimitInfo.remainingLessons >= 0 && (
+                    <View style={styles.dailyLimitContainer}>
+                        <Ionicons name="time-outline" size={16} color={colors.primary} />
+                        <ThemedText style={styles.dailyLimitText}>
+                            {dailyLimitInfo.remainingLessons} free lessons remaining today
+                        </ThemedText>
+                        <View style={styles.dailyLimitUpgradeButtonWrapper}>
+                            <UpgradeToProButton
+                                style={styles.dailyLimitUpgradeButton}
+                                onPress={() => setShowPaywall(true)}
+                            />
+                        </View>
+                    </View>
+                )}
             </View>
         );
     }
 
     function UnitCard({ unit }: { unit: Unit }) {
         const isLocked = isUnitLocked(unit.id);
-        const isPremiumLocked = learner?.subscription === 'free' && unit.id !== units[0]?.id;
+        const isPremiumLocked = learner?.subscription === 'free' && unit.unitOrder > 2;
 
         return (
             <LinearGradient
@@ -759,15 +881,48 @@ export default function LessonsScreen() {
     }).length;
     const currentLevel = completedLessons + 1;
 
-    // Add cleanup effect when component unmounts
-    useEffect(() => {
-        return () => {
-            // Cleanup resources when component unmounts
-            if (currentUnit) {
-                deleteUnitResources(currentUnit.id).catch(console.error);
-            }
-        };
-    }, [currentUnit]);
+    // Daily Limit Modal Component
+    function DailyLimitModal() {
+        return (
+            <Modal
+                visible={showDailyLimitModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowDailyLimitModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.dailyLimitModalContainer}>
+                        <View style={styles.dailyLimitIconContainer}>
+                            <Ionicons name="time" size={48} color={colors.primary} />
+                        </View>
+                        <ThemedText style={styles.dailyLimitModalTitle}>
+                            Daily Limit Reached! 🕐
+                        </ThemedText>
+                        <ThemedText style={styles.dailyLimitModalDescription}>
+                            You've completed your 3 free lessons for today. Come back tomorrow for more learning, or upgrade to Premium for unlimited access!
+                        </ThemedText>
+                        <View style={styles.dailyLimitModalButtons}>
+                            <Pressable
+                                style={[styles.dailyLimitButton, styles.dailyLimitButtonSecondary]}
+                                onPress={() => setShowDailyLimitModal(false)}
+                            >
+                                <ThemedText style={styles.dailyLimitButtonTextSecondary}>
+                                    Maybe Later
+                                </ThemedText>
+                            </Pressable>
+                            <UpgradeToProButton
+                                style={{ flex: 1, marginLeft: 12 }}
+                                onPress={() => {
+                                    setShowDailyLimitModal(false);
+                                    setShowPaywall(true);
+                                }}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        );
+    }
 
     const styles = StyleSheet.create({
         container: {
@@ -835,7 +990,7 @@ export default function LessonsScreen() {
             marginBottom: 8,
         },
         lessonIcon: {
-            fontSize: 36,
+            fontSize: 24,
         },
         lessonLevel: {
             fontSize: 15,
@@ -858,34 +1013,45 @@ export default function LessonsScreen() {
             fontWeight: '500',
         },
         downloadProgressContainer: {
+            width: '100%',
             padding: 16,
             backgroundColor: isDark ? colors.surfaceHigh : '#EFF6FF',
-            borderBottomWidth: 1,
-            borderBottomColor: isDark ? colors.border : '#DBEAFE',
+            borderRadius: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 2,
+            marginHorizontal: 0,
+            marginTop: 16,
+            marginBottom: 16,
         },
-        downloadProgressText: {
-            fontSize: 14,
-            color: colors.primary,
+        downloadProgressHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             marginBottom: 8,
         },
-        currentFileProgress: {
-            marginTop: 4,
-        },
-        currentFileName: {
-            fontSize: 12,
+        downloadProgressTitle: {
+            fontSize: 15,
+            fontWeight: 'bold',
             color: colors.primary,
-            marginBottom: 4,
+        },
+        downloadProgressCount: {
+            fontSize: 14,
+            fontWeight: '500',
+            color: colors.primary,
         },
         progressBarContainer: {
-            height: 4,
+            height: 8,
             backgroundColor: isDark ? colors.surfaceHigh : '#DBEAFE',
-            borderRadius: 2,
+            borderRadius: 4,
             overflow: 'hidden',
         },
         progressBar: {
             height: '100%',
             backgroundColor: colors.primary,
-            borderRadius: 2,
+            borderRadius: 4,
         },
         scrollTopButton: {
             position: 'absolute',
@@ -1052,15 +1218,111 @@ export default function LessonsScreen() {
             borderRadius: 12,
             paddingHorizontal: 8,
             paddingVertical: 4,
-            marginLeft: 8,
+            marginHorizontal: 8,
             borderWidth: 1,
             borderColor: '#FCD34D',
+
         },
         premiumBadgeText: {
             color: '#FCD34D',
             fontSize: 12,
             fontWeight: 'bold',
             marginLeft: 4,
+        },
+        modal: {
+            margin: 0,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        modalView: {
+            width: '100%',
+            alignItems: 'stretch',
+            marginTop: 0,
+            marginBottom: 0,
+            paddingHorizontal: 0,
+        },
+        bunnyImage: {
+            width: 100,
+            height: 100,
+            marginBottom: 16,
+        },
+        dailyLimitContainer: {
+            flexDirection: 'column',
+            alignItems: 'center',
+            marginTop: 8,
+        },
+        dailyLimitText: {
+            color: colors.primary,
+            fontSize: 14,
+            fontWeight: '500',
+            marginLeft: 4,
+        },
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        dailyLimitModalContainer: {
+            backgroundColor: isDark ? colors.surface : '#fff',
+            padding: 20,
+            borderRadius: 20,
+            width: '80%',
+            maxWidth: 400,
+            alignItems: 'center',
+        },
+        dailyLimitIconContainer: {
+            backgroundColor: colors.primary,
+            borderRadius: 24,
+            padding: 12,
+            marginBottom: 16,
+        },
+        dailyLimitModalTitle: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            color: colors.text,
+            marginBottom: 8,
+        },
+        dailyLimitModalDescription: {
+            color: isDark ? colors.textSecondary : '#64748B',
+            fontSize: 14,
+            textAlign: 'center',
+            marginBottom: 20,
+        },
+        dailyLimitModalButtons: {
+            flexDirection: 'row',
+            justifyContent: 'space-around',
+            width: '100%',
+        },
+        dailyLimitButton: {
+            padding: 12,
+            borderRadius: 8,
+            backgroundColor: colors.primary,
+        },
+        dailyLimitButtonSecondary: {
+            backgroundColor: isDark ? colors.surfaceHigh : '#e5e7eb',
+        },
+        dailyLimitButtonTextSecondary: {
+            color: colors.text,
+            fontSize: 14,
+            fontWeight: 'bold',
+        },
+        dailyLimitButtonPrimary: {
+            backgroundColor: colors.primary,
+        },
+        dailyLimitButtonTextPrimary: {
+            color: colors.buttonText,
+            fontSize: 14,
+            fontWeight: 'bold',
+        },
+        dailyLimitUpgradeButton: {
+            alignSelf: 'center',
+            minWidth: 140,
+        },
+        dailyLimitUpgradeButtonWrapper: {
+            width: 'auto',
+            alignItems: 'center',
+            marginTop: 10,
         },
     });
 
@@ -1072,35 +1334,39 @@ export default function LessonsScreen() {
                     languageName={languageName as string}
                     topPadding={0} // Let SafeAreaView handle the top padding
                 />
-
+                {/* Inline download progress UI instead of Modal */}
+                {downloadProgress !== null && (
+                    <View style={styles.modalView}>
+                        <ThemedView style={styles.downloadProgressContainer}>
+                            <Image 
+                                source={require('@/assets/images/bunny-waiting.gif')} 
+                                style={styles.bunnyImage}
+                            />
+                            <View style={styles.downloadProgressHeader}>
+                                <ThemedText style={styles.downloadProgressTitle}>
+                                    Getting things ready...
+                                </ThemedText>
+                                <ThemedText style={styles.downloadProgressCount}>
+                                    {Math.round((downloadProgress.completed / downloadProgress.total) * 100)}%
+                                </ThemedText>
+                            </View>
+                            <View style={styles.progressBarContainer}>
+                                <View
+                                    style={[
+                                        styles.progressBar,
+                                        { width: `${(downloadProgress.completed / downloadProgress.total) * 100}%` }
+                                    ]}
+                                />
+                            </View>
+                        </ThemedView>
+                    </View>
+                )}
                 {isLoading ? (
                     <ActivityIndicator size="large" color={colors.primary} />
                 ) : error ? (
                     <ThemedText>{error}</ThemedText>
                 ) : (
                     <>
-                        {downloadProgress && (
-                            <ThemedView style={styles.downloadProgressContainer}>
-                                <ThemedText style={styles.downloadProgressText}>
-                                    Downloading resources: {downloadProgress.completed}/{downloadProgress.total}
-                                </ThemedText>
-                                {downloadProgress.currentFile && (
-                                    <ThemedView style={styles.currentFileProgress}>
-                                        <ThemedText style={styles.currentFileName} numberOfLines={1}>
-                                            {downloadProgress.currentFile.name}
-                                        </ThemedText>
-                                        <View style={styles.progressBarContainer}>
-                                            <View
-                                                style={[
-                                                    styles.progressBar,
-                                                    { width: `${downloadProgress.currentFile.progress * 100}%` }
-                                                ]}
-                                            />
-                                        </View>
-                                    </ThemedView>
-                                )}
-                            </ThemedView>
-                        )}
                         {units.length === 0 ? (
                             <ThemedText style={{ textAlign: 'center', fontSize: 18, marginTop: 40 }}>
                                 📚✨ Lessons for this language are still being added. Please check back soon! 🚧
@@ -1166,6 +1432,16 @@ export default function LessonsScreen() {
                             </>
                         )}
                     </>
+                )}
+                <DailyLimitModal />
+                {showPaywall && (
+                    <Paywall
+                        onSuccess={() => {
+                            setShowPaywall(false);
+                            // Optionally refresh data after upgrade
+                        }}
+                        onClose={() => setShowPaywall(false)}
+                    />
                 )}
             </ThemedView>
         </SafeAreaView>

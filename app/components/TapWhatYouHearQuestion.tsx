@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useTheme } from '@/contexts/ThemeContext';
+import React, { useEffect, useMemo, useState } from 'react';
+import { StyleSheet } from 'react-native';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { AudioPlayer } from './AudioPlayer';
-import { useTheme } from '@/contexts/ThemeContext';
 import { WordSelectionOptions } from './WordSelectionOptions';
 
 interface Word {
@@ -29,10 +29,19 @@ function getWordById(words: Word[], id: string | number) {
     return words.find(w => w.id === Number(id));
 }
 
-export function TapWhatYouHearQuestion({ words, sentenceWords, options, selectedLanguage, questionId, setOnCheck, setOnContinue, setIsQuestionAnswered }: TapWhatYouHearQuestionProps) {
+export function TapWhatYouHearQuestion({ words, sentenceWords, options = [], selectedLanguage, questionId, setOnCheck, setOnContinue, setIsQuestionAnswered }: TapWhatYouHearQuestionProps) {
     const [selectedWordIds, setSelectedWordIds] = useState<number[]>([]);
     const { setFeedback, resetFeedback } = useFeedback();
     const { colors } = useTheme();
+    const [autoPlay, setAutoPlay] = React.useState(true);
+
+    // Disable auto-play after 3 seconds on page load
+    useEffect(() => {
+        setAutoPlay(true); // Reset autoPlay to true for each new question
+        setTimeout(() => {
+            setAutoPlay(false);
+        }, 3000);
+    }, [questionId]); // Add questionId as dependency to reset autoPlay for each new question
 
     // Get audio URLs for normal and slow (if available) - only calculate once when sentence words change
     const audioUrls = useMemo(() => {
@@ -91,7 +100,7 @@ export function TapWhatYouHearQuestion({ words, sentenceWords, options, selected
     return (
         <ThemedView style={[styles.container, { backgroundColor: colors.background }]}>
             <ThemedText style={[styles.title, { color: colors.text }]}>👂 Can you hear it? Tap it!</ThemedText>
-            <AudioPlayer audioUrls={audioUrls} autoPlay={true} showGif={true} />
+            <AudioPlayer audioUrls={audioUrls} autoPlay={autoPlay} showGif={true} />
             <WordSelectionOptions
                 words={words}
                 options={options}

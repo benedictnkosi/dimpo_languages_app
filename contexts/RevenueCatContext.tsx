@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { CustomerInfo, PurchasesOffering } from 'react-native-purchases';
-import { revenueCatService, PurchasePackage } from '../services/revenueCat';
+import { PurchasePackage, revenueCatService } from '../services/revenueCat';
 
 interface RevenueCatContextType {
     customerInfo: CustomerInfo | null;
@@ -28,15 +28,43 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     async function initializeRevenueCat() {
         try {
             setIsLoading(true);
+            setError(null);
+            
             await revenueCatService.initialize();
+            
             const [customerInfo, offerings] = await Promise.all([
                 revenueCatService.getCustomerInfo(),
                 revenueCatService.getOfferings(),
             ]);
+            
             setCustomerInfo(customerInfo);
             setOfferings(offerings);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Failed to initialize RevenueCat'));
+            const error = err instanceof Error ? err : new Error('Failed to initialize RevenueCat');
+            setError(error);
+            console.warn('RevenueCat initialization failed:', error.message);
+            
+            // In development, don't let RevenueCat errors crash the app
+            if (__DEV__) {
+                // Set default values to allow app to continue
+                setCustomerInfo({
+                    entitlements: { active: {} },
+                    allPurchaseDates: {},
+                    allExpirationDates: {},
+                    allPurchasedProductIdentifiers: [],
+                    latestExpirationDate: null,
+                    firstSeen: new Date().toISOString(),
+                    originalAppUserId: '',
+                    requestDate: new Date().toISOString(),
+                    originalApplicationVersion: '',
+                    originalPurchaseDate: null,
+                    managementURL: null,
+                    nonSubscriptionTransactions: [],
+                    activeSubscriptions: [],
+                    subscriptionsByProductIdentifier: {},
+                } as unknown as CustomerInfo);
+                setOfferings(null);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -45,11 +73,13 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     async function purchasePackage(packageToPurchase: PurchasePackage) {
         try {
             setIsLoading(true);
+            setError(null);
             const updatedCustomerInfo = await revenueCatService.purchasePackage(packageToPurchase);
             setCustomerInfo(updatedCustomerInfo);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Failed to purchase package'));
-            throw err;
+            const error = err instanceof Error ? err : new Error('Failed to purchase package');
+            setError(error);
+            throw error;
         } finally {
             setIsLoading(false);
         }
@@ -58,11 +88,13 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     async function restorePurchases() {
         try {
             setIsLoading(true);
+            setError(null);
             const updatedCustomerInfo = await revenueCatService.restorePurchases();
             setCustomerInfo(updatedCustomerInfo);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Failed to restore purchases'));
-            throw err;
+            const error = err instanceof Error ? err : new Error('Failed to restore purchases');
+            setError(error);
+            throw error;
         } finally {
             setIsLoading(false);
         }
@@ -71,12 +103,14 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     async function identifyUser(userId: string) {
         try {
             setIsLoading(true);
+            setError(null);
             await revenueCatService.identifyUser(userId);
             const updatedCustomerInfo = await revenueCatService.getCustomerInfo();
             setCustomerInfo(updatedCustomerInfo);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Failed to identify user'));
-            throw err;
+            const error = err instanceof Error ? err : new Error('Failed to identify user');
+            setError(error);
+            throw error;
         } finally {
             setIsLoading(false);
         }
@@ -85,12 +119,14 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     async function resetUser() {
         try {
             setIsLoading(true);
+            setError(null);
             await revenueCatService.resetUser();
             const updatedCustomerInfo = await revenueCatService.getCustomerInfo();
             setCustomerInfo(updatedCustomerInfo);
         } catch (err) {
-            setError(err instanceof Error ? err : new Error('Failed to reset user'));
-            throw err;
+            const error = err instanceof Error ? err : new Error('Failed to reset user');
+            setError(error);
+            throw error;
         } finally {
             setIsLoading(false);
         }
