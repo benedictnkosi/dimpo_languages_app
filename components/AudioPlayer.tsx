@@ -43,7 +43,7 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
     useEffect(() => {
         // Configure audio session
         async function configureAudioSession() {
-            console.log('[AudioPlayer] Configuring audio session...');
+            //console.log('[AudioPlayer] Configuring audio session...');
             try {
                 await Audio.setAudioModeAsync({
                     allowsRecordingIOS: false,
@@ -52,7 +52,7 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
                     shouldDuckAndroid: true,
                     playThroughEarpieceAndroid: false,
                 });
-                console.log('[AudioPlayer] Audio session configured successfully');
+                //console.log('[AudioPlayer] Audio session configured successfully');
             } catch (error) {
                 console.error('[AudioPlayer] Error configuring audio session:', error);
             }
@@ -61,7 +61,7 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
 
         return sound
             ? () => {
-                console.log('[AudioPlayer] Cleaning up sound...');
+                //console.log('[AudioPlayer] Cleaning up sound...');
                 sound.unloadAsync();
             }
             : undefined;
@@ -69,7 +69,7 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
 
     // Log when props change
     useEffect(() => {
-        console.log('[AudioPlayer] Props updated:', { audioUrl, imageUrl, title });
+        //console.log('[AudioPlayer] Props updated:', { audioUrl, imageUrl, title });
     }, [audioUrl, imageUrl, title]);
 
     function formatTime(milliseconds: number): string {
@@ -83,15 +83,15 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
         try {
             setIsLoading(true);
             setHasDuration(false);
-            console.log('[AudioPlayer] Loading state set to true');
+            //console.log('[AudioPlayer] Loading state set to true');
 
             // Unload existing sound if any
             if (sound) {
-                console.log('[AudioPlayer] Unloading existing sound');
+                //console.log('[AudioPlayer] Unloading existing sound');
                 await sound.unloadAsync();
             }
 
-            console.log('[AudioPlayer] Creating new sound instance...');
+            //console.log('[AudioPlayer] Creating new sound instance...');
             // Create new sound instance
             const { sound: newSound } = await Audio.Sound.createAsync(
                 { uri: audioUrl },
@@ -103,16 +103,16 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
                     androidImplementation: 'MediaPlayer'
                 },
                 (status) => {
-                    console.log('[AudioPlayer] Loading status:', status);
+                    //console.log('[AudioPlayer] Loading status:', status);
                     if (status.isLoaded && status.durationMillis) {
-                        console.log('[AudioPlayer] Initial duration:', status.durationMillis);
+                        //console.log('[AudioPlayer] Initial duration:', status.durationMillis);
                         setDuration(status.durationMillis);
                         setHasDuration(true);
                     }
                 }
             );
 
-            console.log('[AudioPlayer] Sound instance created successfully');
+            //console.log('[AudioPlayer] Sound instance created successfully');
             setSound(newSound);
             setIsPlaying(true);
             setIsLoading(false);
@@ -135,11 +135,11 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
                     }
 
                     if (status.didJustFinish) {
-                        console.log('[AudioPlayer] Playback finished');
+                        //console.log('[AudioPlayer] Playback finished');
                         setIsPlaying(false);
                     }
                 } else {
-                    console.log('[AudioPlayer] Received unloaded status:', status);
+                    //console.log('[AudioPlayer] Received unloaded status:', status);
                 }
             });
         } catch (error) {
@@ -156,11 +156,11 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
 
     async function stopSound() {
         if (sound) {
-            console.log('[AudioPlayer] Attempting to stop sound');
+            //console.log('[AudioPlayer] Attempting to stop sound');
             try {
                 await sound.stopAsync();
                 setIsPlaying(false);
-                console.log('[AudioPlayer] Sound stopped successfully');
+                //console.log('[AudioPlayer] Sound stopped successfully');
             } catch (error) {
                 console.error('[AudioPlayer] Error stopping sound:', error);
             }
@@ -169,14 +169,14 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
 
     async function rewindSound() {
         if (sound) {
-            console.log('[AudioPlayer] Attempting to rewind');
+            //console.log('[AudioPlayer] Attempting to rewind');
             try {
                 const status = await sound.getStatusAsync();
-                console.log('[AudioPlayer] Current status before rewind:', status);
+                //console.log('[AudioPlayer] Current status before rewind:', status);
                 if (status.isLoaded) {
                     const newPosition = Math.max(0, status.positionMillis - SKIP_DURATION);
                     await sound.setPositionAsync(newPosition);
-                    console.log('[AudioPlayer] Rewound to position:', newPosition);
+                    //console.log('[AudioPlayer] Rewound to position:', newPosition);
                 }
             } catch (error) {
                 console.error('[AudioPlayer] Error rewinding sound:', error);
@@ -186,17 +186,17 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
 
     async function fastForwardSound() {
         if (sound) {
-            console.log('[AudioPlayer] Attempting to fast forward');
+            //console.log('[AudioPlayer] Attempting to fast forward');
             try {
                 const status = await sound.getStatusAsync();
-                console.log('[AudioPlayer] Current status before fast forward:', status);
+                //console.log('[AudioPlayer] Current status before fast forward:', status);
                 if (status.isLoaded) {
                     const newPosition = Math.min(
                         status.durationMillis || 0,
                         status.positionMillis + SKIP_DURATION
                     );
                     await sound.setPositionAsync(newPosition);
-                    console.log('[AudioPlayer] Fast forwarded to position:', newPosition);
+                    //console.log('[AudioPlayer] Fast forwarded to position:', newPosition);
                 }
             } catch (error) {
                 console.error('[AudioPlayer] Error fast forwarding sound:', error);
@@ -215,8 +215,8 @@ export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(({ audio
                             source={{ uri: imageUrl }}
                             style={styles.image}
                             resizeMode="cover"
-                            onLoadStart={() => console.log('[AudioPlayer] Image loading started:', imageUrl)}
-                            onLoad={() => console.log('[AudioPlayer] Image loaded successfully:', imageUrl)}
+                            onLoadStart={() => //console.log('[AudioPlayer] Image loading started:', imageUrl)}
+                            onLoad={() => //console.log('[AudioPlayer] Image loaded successfully:', imageUrl)}
                             onError={(error) => console.error('[AudioPlayer] Image loading error:', error.nativeEvent.error)}
                         />
                     </View>

@@ -58,7 +58,7 @@ export async function getLearner(uid: string): Promise<{
   );
 
   if (!response.ok) {
-    console.log('Failed to fetch learner');
+    //console.log('Failed to fetch learner');
   }
 
   const data = await response.json();

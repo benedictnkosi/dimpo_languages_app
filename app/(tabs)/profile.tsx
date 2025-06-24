@@ -44,6 +44,7 @@ export default function ProfileScreen() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [isUpgradeLoading, setIsUpgradeLoading] = useState(false);
 
   const fetchLearnerData = async () => {
     try {
@@ -66,7 +67,7 @@ export default function ProfileScreen() {
       });
       setEditName(learnerData.name);
 
-      console.log('subscription', learnerData.subscription);
+      //console.log('subscription', learnerData.subscription);
     } catch (error) {
       console.error('Error fetching learner data:', error);
     }
@@ -99,7 +100,7 @@ export default function ProfileScreen() {
         }),
       });
 
-      console.log('response', response);
+      //console.log('response', response);
 
       if (!response.ok) {
         throw new Error('Failed to update profile');
@@ -185,20 +186,20 @@ export default function ProfileScreen() {
   const handleClearCache = async () => {
     setIsClearingCache(true);
     try {
-        console.log('Clearing cached resources...');
+        //console.log('Clearing cached resources...');
         const audioDir = `${FileSystem.documentDirectory}audio`;
         const imageDir = `${FileSystem.documentDirectory}image`;
 
         const audioDirInfo = await FileSystem.getInfoAsync(audioDir);
         if (audioDirInfo.exists) {
             await FileSystem.deleteAsync(audioDir, { idempotent: true });
-            console.log('Cleared audio cache.');
+            //console.log('Cleared audio cache.');
         }
 
         const imageDirInfo = await FileSystem.getInfoAsync(imageDir);
         if (imageDirInfo.exists) {
             await FileSystem.deleteAsync(imageDir, { idempotent: true });
-            console.log('Cleared image cache.');
+            //console.log('Cleared image cache.');
         }
         
         Toast.show({
@@ -320,11 +321,15 @@ export default function ProfileScreen() {
                 ✨ Unlock Premium Features
               </ThemedText>
               <ThemedText style={[styles.upgradeDescription, { color: colors.textSecondary }]}>
-                Get unlimited access to all lessons, advanced analytics, and more!
+                Get unlimited access to all lessons!
               </ThemedText>
               <UpgradeToProButton
                 style={styles.upgradeButton}
-                onPress={() => setShowPaywall(true)}
+                onPress={() => {
+                  setIsUpgradeLoading(true);
+                  setShowPaywall(true);
+                }}
+                loading={isUpgradeLoading}
               />
             </ThemedView>
           )}
@@ -400,10 +405,14 @@ export default function ProfileScreen() {
         <Paywall
           onSuccess={() => {
             setShowPaywall(false);
+            setIsUpgradeLoading(false);
             // Refresh profile data after successful upgrade
             fetchLearnerData();
           }}
-          onClose={() => setShowPaywall(false)}
+          onClose={() => {
+            setShowPaywall(false);
+            setIsUpgradeLoading(false);
+          }}
         />
       )}
 

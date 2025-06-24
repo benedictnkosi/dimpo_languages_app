@@ -1,5 +1,6 @@
 import { HOST_URL } from '@/config/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { analytics } from '@/services/analytics';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -209,7 +210,7 @@ interface FirebaseError extends Error {
 
 async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams, retryCount = 0): Promise<any> {
   try {
-    console.log(`[Guest Account] Attempt ${retryCount + 1}/${MAX_RETRIES} - Starting guest account creation`);
+    //console.log(`[Guest Account] Attempt ${retryCount + 1}/${MAX_RETRIES} - Starting guest account creation`);
 
     // Generate a 16-character UID
     const guestUid = Array.from(crypto.getRandomValues(new Uint8Array(8)))
@@ -220,12 +221,12 @@ async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams
     const guestEmail = `${guestUid}@guest.com`;
     const defaultPassword = 'password';
 
-    console.log('[Guest Account] Generated credentials:', { guestEmail });
+    //console.log('[Guest Account] Generated credentials:', { guestEmail });
 
     // Register the guest user
-    console.log('[Guest Account] Attempting to sign up with Firebase...');
+    //console.log('[Guest Account] Attempting to sign up with Firebase...');
     const user = await signUp(guestEmail, defaultPassword);
-    console.log('[Guest Account] Firebase signup successful:', { uid: user?.uid });
+    //console.log('[Guest Account] Firebase signup successful:', { uid: user?.uid });
 
     // Create learner profile for guest
     const learnerData = {
@@ -234,7 +235,7 @@ async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams
       avatar: selectedAvatar,
     };
 
-    console.log('[Guest Account] Created learner data:', learnerData);
+    //console.log('[Guest Account] Created learner data:', learnerData);
 
     // Create new learner in database using the new API endpoint
     try {
@@ -258,7 +259,7 @@ async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams
         }),
       });
 
-      console.log('[Guest Account] Response:', response);
+      //console.log('[Guest Account] Response:', response);
 
       if (!response.ok) {
         console.error('[Guest Account] Failed to create learner profile');
@@ -267,7 +268,7 @@ async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams
       }
 
       const learnerResponse = await response.json();
-      console.log('[Guest Account] Learner created:', learnerResponse);
+      //console.log('[Guest Account] Learner created:', learnerResponse);
     } catch (error) {
       console.error('[Guest Account] Error creating learner:', error);
       // Don't throw here as the user is already registered
@@ -275,7 +276,7 @@ async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams
     }
 
     // Store onboarding data
-    console.log('[Guest Account] Storing onboarding data...');
+    //console.log('[Guest Account] Storing onboarding data...');
     await AsyncStorage.setItem('onboardingData', JSON.stringify({
       curriculum: 'CAPS',
       avatar: selectedAvatar,
@@ -284,10 +285,10 @@ async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams
     }));
 
     // Store auth token
-    console.log('[Guest Account] Storing auth token...');
+    //console.log('[Guest Account] Storing auth token...');
     await SecureStore.setItemAsync('auth', JSON.stringify({ user }));
 
-    console.log('[Guest Account] Guest account creation completed successfully');
+    //console.log('[Guest Account] Guest account creation completed successfully');
     return user;
   } catch (error: unknown) {
     const firebaseError = error as FirebaseError;
@@ -302,7 +303,7 @@ async function createGuestAccount({ selectedAvatar, signUp }: GuestAccountParams
     });
 
     if (retryCount < MAX_RETRIES) {
-      console.log(`[Guest Account] Retrying in ${RETRY_DELAY}ms... (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
+      //console.log(`[Guest Account] Retrying in ${RETRY_DELAY}ms... (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
       return createGuestAccount({ selectedAvatar, signUp }, retryCount + 1);
@@ -344,6 +345,14 @@ export default function OnboardingScreen() {
     checkAuthAndOnboarding();
   });
 
+  // Track onboarding screen view
+  useEffect(() => {
+    analytics.track('langauges_onboarding_started', {
+      step_number: step,
+      step_name: getStepName(step)
+    });
+  }, [step]);
+
   const handleNextStep = () => {
     setErrors({ curriculum: '' });
 
@@ -375,6 +384,13 @@ export default function OnboardingScreen() {
 
   const handleComplete = async () => {
     try {
+      // Track onboarding completion through registration
+      analytics.track('langauges_onboarding_completed', {
+        method: 'registration',
+        avatar_id: selectedAvatar,
+        total_steps: 6
+      });
+
       // Store onboarding data
       await AsyncStorage.setItem('onboardingData', JSON.stringify({
         curriculum: 'CAPS',
@@ -500,7 +516,11 @@ export default function OnboardingScreen() {
                       styles.avatarButton,
                       selectedAvatar === avatarId && styles.avatarButtonSelected
                     ]}
-                    onPress={() => setSelectedAvatar(avatarId)}
+                    onPress={() => {
+                      // Track avatar selection
+                      
+                      setSelectedAvatar(avatarId);
+                    }}
                     testID={`avatar-${avatarId}`}
                   >
                     <Image
@@ -535,7 +555,17 @@ export default function OnboardingScreen() {
                 style={[styles.authButton, styles.guestButton]}
                 onPress={async () => {
                   try {
+                    // Track guest account creation
+                    analytics.track('langauges_onboarding_guest_account_created', {
+                      step_number: 6,
+                      step_name: 'guest',
+                      avatar_id: selectedAvatar
+                    });
+                    
                     await createGuestAccount({ selectedAvatar, signUp });
+                    
+                    
+                    
                     router.replace('/(tabs)');
                   } catch (error) {
                     console.error('Failed to create guest account:', error);
@@ -557,6 +587,8 @@ export default function OnboardingScreen() {
               <TouchableOpacity
                 style={[styles.authButton, styles.emailButton]}
                 onPress={() => {
+                  
+                  
                   router.push({
                     pathname: '/register',
                     params: {
@@ -614,14 +646,24 @@ export default function OnboardingScreen() {
               <>
                 <TouchableOpacity
                   style={[styles.button, styles.secondaryButton]}
-                  onPress={() => router.replace('/login')}
+                  onPress={() => {
+                   
+                    router.replace('/login');
+                  }}
                   testID="login-button"
                 >
                   <ThemedText style={styles.buttonText}>Back</ThemedText>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.button, styles.primaryButton]}
-                  onPress={() => setStep(1)}
+                  onPress={() => {
+                    // Track onboarding start
+                    analytics.track('langauges_onboarding_started', {
+                      step_number: 1,
+                      step_name: 'welcome'
+                    });
+                    setStep(1);
+                  }}
                   testID="start-onboarding-button"
                 >
                   <ThemedText style={[styles.buttonText, styles.primaryButtonText]}>
@@ -634,6 +676,7 @@ export default function OnboardingScreen() {
                 <TouchableOpacity
                   style={[styles.button, styles.secondaryButton]}
                   onPress={() => {
+                    
                     setStep(step - 1);
                   }}
                   testID="previous-step-button"

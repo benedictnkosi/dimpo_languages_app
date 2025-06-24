@@ -1,6 +1,7 @@
 import { ThemedText } from '@/components/ThemedText';
 import { HOST_URL } from '@/config/api';
 import { useTheme } from '@/contexts/ThemeContext';
+import { analytics } from '@/services/analytics';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
@@ -29,7 +30,7 @@ export function FeedbackMessage({ onContinue }: { onContinue: () => void }) {
         setReportStatus(null);
         try {
             const url = `${HOST_URL}/api/language-questions/${questionId}/report`;
-            console.log('Reporting question', url);
+            //console.log('Reporting question', url);
             const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -137,6 +138,12 @@ export function FeedbackButton({ isDisabled, onCheck, onContinue }: FeedbackButt
         await onCheck();
         // Wait for the feedback context to update
         setTimeout(() => {
+            // Track analytics for first-time question answer
+            analytics.track('question_answered', {
+                isCorrect: latestFeedbackRef.current.isCorrect,
+                timestamp: new Date().toISOString(),
+            });
+            
             playFeedbackSound(latestFeedbackRef.current.isCorrect ? 'correct' : 'wrong');
         }, 100);
     };
@@ -146,16 +153,14 @@ export function FeedbackButton({ isDisabled, onCheck, onContinue }: FeedbackButt
     let buttonTextStyle = { ...styles.buttonText, color: colors.buttonText };
     let useGradient = false;
 
-    console.log('isDisabled', isDisabled);
-    console.log('isChecked', isChecked);
-    console.log('isCorrect', isCorrect);
+    //console.log('isDisabled', isDisabled);
+    //console.log('isChecked', isChecked);
+    //console.log('isCorrect', isCorrect);
 
     if (isDisabled) {
         buttonStyle = {
             ...buttonStyle,
             backgroundColor: isDark ? colors.surfaceHigh : colors.surface,
-            shadowColor: 'transparent',
-            elevation: 0,
         };
         buttonTextStyle = { ...buttonTextStyle, color: isDark ? colors.textSecondary : '#9CA3AF' };
     } else if (isChecked && isCorrect) {
@@ -188,24 +193,26 @@ export function FeedbackButton({ isDisabled, onCheck, onContinue }: FeedbackButt
         <View style={[styles.stickyButtonContainer, { width, paddingBottom: insets.bottom + 16 }]}>
             <Animated.View style={{ width: '100%', transform: [{ scale }] }}>
                 {useGradient && !isDisabled ? (
-                    <LinearGradient
-                        colors={['#34d399', '#10b981']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={buttonStyle}
-                    >
-                        <Pressable
-                            style={{ width: '100%', alignItems: 'center', justifyContent: 'center', height: '100%' }}
-                            onPress={isChecked ? onContinue : handleCheck}
-                            disabled={isDisabled}
-                            onPressIn={handlePressIn}
-                            onPressOut={handlePressOut}
-                            android_ripple={{ color: '#059669' }}
-                            accessibilityRole="button"
+                    <View style={styles.buttonWrapper}>
+                        <LinearGradient
+                            colors={['#34d399', '#10b981']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={buttonStyle}
                         >
-                            <ThemedText style={buttonTextStyle}>{buttonText}</ThemedText>
-                        </Pressable>
-                    </LinearGradient>
+                            <Pressable
+                                style={{ width: '100%', alignItems: 'center', justifyContent: 'center', height: '100%' }}
+                                onPress={isChecked ? onContinue : handleCheck}
+                                disabled={isDisabled}
+                                onPressIn={handlePressIn}
+                                onPressOut={handlePressOut}
+                                android_ripple={{ color: '#059669' }}
+                                accessibilityRole="button"
+                            >
+                                <ThemedText style={buttonTextStyle}>{buttonText}</ThemedText>
+                            </Pressable>
+                        </LinearGradient>
+                    </View>
                 ) : (
                     <Pressable
                         style={[
@@ -264,14 +271,6 @@ const styles = StyleSheet.create({
         borderRadius: 28,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#10b981',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.18,
-        shadowRadius: 8,
-        elevation: 6,
         marginBottom: 0,
         backgroundColor: 'transparent',
     },
@@ -324,6 +323,16 @@ const styles = StyleSheet.create({
     reportStatus: {
         fontSize: 14,
         marginTop: 4,
+    },
+    buttonWrapper: {
+        shadowColor: '#10b981',
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+        elevation: 6,
     },
 });
 

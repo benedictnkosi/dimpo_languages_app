@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { HOST_URL } from '@/config/api';
 import { useTheme } from '@/contexts/ThemeContext';
+import { analytics } from '@/services/analytics';
 import { Language } from '@/types/language';
 
 // Speaker data for South African languages
@@ -91,7 +92,25 @@ export default function HomeScreen() {
     fetchLanguages();
   }, []);
 
+  // Track home screen view
+  useEffect(() => {
+    analytics.track('languages_home_screen_viewed', {
+      languages_count: languages.length,
+      is_loading: isLoading,
+      has_error: !!error
+    });
+  }, [languages.length, isLoading, error]);
+
   const handleLanguagePress = (language: Language) => {
+    // Track language selection
+    analytics.track('languages_language_selected', {
+      language_code: language.code,
+      language_name: language.name,
+      language_native_name: language.nativeName,
+      speakers_count: SPEAKERS_DATA[getSpeakersKey(language.name)]?.speakers || 0,
+      speakers_percentage: SPEAKERS_DATA[getSpeakersKey(language.name)]?.percentage || 0
+    });
+
     router.push({
       pathname: '/lessons',
       params: {
@@ -103,6 +122,12 @@ export default function HomeScreen() {
 
   const handleShareApp = async () => {
     try {
+      // Track app sharing
+      analytics.track('languages_app_shared', {
+        platform: 'home_screen',
+        share_method: 'native_share'
+      });
+
       const iosLink = 'https://apps.apple.com/app/dimpo-languages/6742684696';
       const androidLink = 'https://play.google.com/store/apps/details?id=com.dimpolanguages';
       

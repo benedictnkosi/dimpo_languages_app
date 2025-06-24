@@ -17,7 +17,6 @@ interface Word {
 interface MatchPairsQuestionProps {
     words: Word[];
     selectedLanguage: string;
-    areResourcesDownloaded: boolean;
     matchType?: 'audio' | 'text';
     questionId: string;
     setOnCheck?: (fn: () => void) => void;
@@ -38,7 +37,6 @@ function AudioButton({ isSelected }: { isSelected?: boolean }) {
 export function MatchPairsQuestion({
     words,
     selectedLanguage,
-    areResourcesDownloaded,
     matchType = 'audio',
     questionId,
     setOnCheck,
@@ -80,7 +78,7 @@ export function MatchPairsQuestion({
         Promise.all(promises).then(() => {
             setAudioUrlMap(newMap);
         });
-    }, [words, selectedLanguage, areResourcesDownloaded]);
+    }, [words, selectedLanguage]);
 
     // Shuffle array using Fisher-Yates algorithm
     const shuffledWords = React.useMemo(() => {
@@ -92,7 +90,7 @@ export function MatchPairsQuestion({
         return array;
     }, [words]);
 
-    console.log('matchType', matchType);
+    //console.log('matchType', matchType);
 
     // Play feedback sound
     async function playFeedbackSound(type: 'correct' | 'wrong') {

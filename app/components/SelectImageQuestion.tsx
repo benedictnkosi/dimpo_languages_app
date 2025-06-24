@@ -118,9 +118,9 @@ export function SelectImageQuestion({
         );
     }
 
-    console.log('SelectImageQuestion options:', options);
-    console.log('SelectImageQuestion words:', words);
-    console.log('Shuffled options:', shuffledOptions);
+    //console.log('SelectImageQuestion options:', options);
+    //console.log('SelectImageQuestion words:', words);
+    //console.log('Shuffled options:', shuffledOptions);
 
     function handleSelectOption(index: number) {
         setSelectedIndex(index);
@@ -166,7 +166,7 @@ export function SelectImageQuestion({
                 <View style={styles.optionsGrid}>
                     {shuffledOptions.map((optionId, index) => {
                         const word = words.find(w => String(w.id) === String(optionId));
-                        console.log(`Option index ${index}: optionId=${optionId}, word=`, word);
+                        //console.log(`Option index ${index}: optionId=${optionId}, word=`, word);
                         if (!word) return null;
                         const selectedLanguageWord = word.translations[selectedLanguage];
                         const isSelected = selectedIndex === index;
@@ -251,6 +251,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         width: '45%',
         aspectRatio: 1,
+        backgroundColor: '#fff',
     },
     selectedOptionCard: {
         borderWidth: 3,
@@ -259,7 +260,6 @@ const styles = StyleSheet.create({
         width: '100%',
         height: undefined,
         aspectRatio: 1,
-        backgroundColor: 'transparent',
     },
     optionTextContainer: {
         padding: 8,

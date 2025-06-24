@@ -44,16 +44,41 @@ interface IncorrectQuestion {
     questionId: string | number;
 }
 
-// Helper to check if resources are downloaded for a unit/language
-async function areResourcesDownloaded(unitId: number, languageCode: string): Promise<boolean> {
-    const key = `unit_${unitId}_${languageCode}_resources`;
-    const downloaded = await SecureStore.getItemAsync(key);
-    if (downloaded === 'true') {
-        // Optionally, check if files exist in the directory
-        return true;
-    }
-    return false;
+// Add interface for daily lesson tracking
+interface DailyLessonCount {
+    count: number;
+    date: string; // ISO date string (YYYY-MM-DD)
 }
+
+// Function to get today's date in YYYY-MM-DD format
+const getTodayString = (): string => {
+    return new Date().toISOString().split('T')[0];
+};
+
+// Function to increment daily lesson count (copied from lessons.tsx)
+const incrementDailyLessonCount = async () => {
+    try {
+        const authData = await SecureStore.getItemAsync('auth');
+        if (!authData) return;
+        const { user } = JSON.parse(authData);
+        const learnerDataResponse = await fetch(`${HOST_URL}/api/language-learners/uid/${user.uid}`);
+        if (!learnerDataResponse.ok) return;
+        const learnerData = await learnerDataResponse.json();
+        if (learnerData.subscription !== 'free') return;
+        const today = getTodayString();
+        const stored = await SecureStore.getItemAsync('dailyLessonCount');
+        let newCount = 1;
+        if (stored) {
+            const parsed: DailyLessonCount = JSON.parse(stored);
+            if (parsed.date === today) {
+                newCount = parsed.count + 1;
+            }
+        }
+        await SecureStore.setItemAsync('dailyLessonCount', JSON.stringify({ count: newCount, date: today }));
+    } catch (error) {
+        console.error('[Lesson] Error saving daily lesson count:', error);
+    }
+};
 
 function LessonContent() {
     const { lessonId, lessonTitle, languageCode, unitName, lessonNumber } = useLocalSearchParams();
@@ -63,7 +88,6 @@ function LessonContent() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [areResourcesDownloadedState, setAreResourcesDownloadedState] = useState(false);
     const { isChecked, isCorrect, questionId } = useFeedback();
     const checkRef = useRef<() => void>(() => { });
     const continueRef = useRef<() => void>(() => { });
@@ -433,7 +457,7 @@ function LessonContent() {
                 return;
             }
             const { user } = JSON.parse(authData);
-            console.log('User:', user.uid);
+            //console.log('User:', user.uid);
             const response = await fetch(`${HOST_URL}/api/language-learners/${user.uid}/increment-points`, {
                 method: 'POST',
                 headers: {
@@ -450,7 +474,7 @@ function LessonContent() {
             }
 
             const data = await response.json();
-            console.log('Points incremented:', data);
+            //console.log('Points incremented:', data);
         } catch (error) {
             console.error('Error incrementing points:', error);
         }
@@ -482,7 +506,7 @@ function LessonContent() {
             }
 
             const data = await response.json();
-            console.log('Lesson progress updated:', data);
+            //console.log('Lesson progress updated:', data);
         } catch (error) {
             console.error('Error updating lesson progress:', error);
         }
@@ -507,37 +531,28 @@ function LessonContent() {
 
     useEffect(() => {
         if (showReview) {
-            console.log('Questions the user got wrong:', incorrectQuestions);
+            //console.log('Questions the user got wrong:', incorrectQuestions);
         }
     }, [showReview, incorrectQuestions]);
 
     useEffect(() => {
         async function fetchQuestions() {
-            console.log('[Lesson] fetchQuestions called', { lessonId, languageCode });
+            //console.log('[Lesson] fetchQuestions called', { lessonId, languageCode });
             try {
                 const response = await fetch(`${HOST_URL}/api/language-questions/lesson/${lessonId}/language/${languageCode}`);
-                console.log('[Lesson] fetchQuestions response status:', response.status);
+                //console.log('[Lesson] fetchQuestions response status:', response.status);
                 const data = await response.json();
-                console.log('[Lesson] fetchQuestions data:', data);
+                //console.log('[Lesson] fetchQuestions data:', data);
                 // Sort questions by questionOrder
                 const sortedQuestions = data.sort((a: Question, b: Question) => a.questionOrder - b.questionOrder);
                 setQuestions(sortedQuestions);
                 setOriginalQuestions(sortedQuestions);
-                // Check for resources for the first question's unitId
-                if (sortedQuestions.length > 0 && sortedQuestions[0].words && sortedQuestions[0].words.length > 0) {
-                    const unitId = sortedQuestions[0].words[0].unitId || null;
-                    if (unitId && languageCode) {
-                        const downloaded = await areResourcesDownloaded(unitId, languageCode as string);
-                        setAreResourcesDownloadedState(downloaded);
-                        console.log('[Lesson] areResourcesDownloaded:', downloaded);
-                    }
-                }
             } catch (err) {
                 console.error('[Lesson] fetchQuestions error:', err);
                 setError("Sorry, we couldn't load your lesson questions. Please check your internet connection or try again shortly.");
             } finally {
                 setIsLoading(false);
-                console.log('[Lesson] fetchQuestions finished, setIsLoading(false)');
+                //console.log('[Lesson] fetchQuestions finished, setIsLoading(false)');
             }
         }
         fetchQuestions();
@@ -658,8 +673,6 @@ function LessonContent() {
                     <MatchPairsQuestion
                         words={question.words || []}
                         selectedLanguage={languageCode as string}
-                        areResourcesDownloaded={areResourcesDownloadedState}
-                        matchType={question.matchType}
                         questionId={String(question.id)}
                         setOnCheck={fn => { checkRef.current = fn; }}
                         setOnContinue={fn => { continueRef.current = fn; }}
@@ -788,7 +801,7 @@ function LessonContent() {
                     }
 
                     const data = await response.json();
-                    console.log('Streak bonus points awarded:', data);
+                    //console.log('Streak bonus points awarded:', data);
                 } catch (error) {
                     console.error('Error awarding streak points:', error);
                 }
@@ -874,6 +887,7 @@ function LessonContent() {
                 // Increment points and update lesson progress when the celebration screen is shown
                 incrementPoints();
                 updateLessonProgress();
+                incrementDailyLessonCount(); // Only increments for free users
             }
         }, [showCelebration]);
 

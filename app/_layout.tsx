@@ -7,12 +7,17 @@ import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { router, SplashScreen, Stack } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import { LogBox, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 import AuthLayout from './_auth';
 import { SoundProvider } from './contexts/SoundContext';
+
+// Suppress shadow warnings
+LogBox.ignoreLogs([
+  'has a shadow set but cannot calculate shadow efficiently',
+]);
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -117,7 +122,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  console.log('[ENTRY] RootLayout rendered');
+  //console.log('[ENTRY] RootLayout rendered');
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -130,7 +135,7 @@ export default function RootLayout() {
   }, [error]);
 
   useEffect(() => {
-    console.log('[Notifications] useEffect');
+    //console.log('[Notifications] useEffect');
 
     if (loaded) {
       SplashScreen.hideAsync();
@@ -141,7 +146,7 @@ export default function RootLayout() {
     // Initialize notifications when app starts
     async function initializeNotifications() {
       try {
-        console.log('[Notifications] Initializing notifications...');
+        //console.log('[Notifications] Initializing notifications...');
 
         // Ensure Firebase is initialized
         if (!app) {
@@ -152,28 +157,28 @@ export default function RootLayout() {
         // Register for push notifications
         const token = await registerForPushNotificationsAsync();
         if (token) {
-          console.log('[Notifications] Successfully registered for push notifications');
+          //console.log('[Notifications] Successfully registered for push notifications');
         }
 
         // Set up notification listeners
         notificationListener.current = Notifications.addNotificationReceivedListener(
           (notification: Notifications.Notification) => {
-            console.log('[Notifications] Received notification:', notification);
+            //console.log('[Notifications] Received notification:', notification);
           }
         );
 
         responseListener.current = Notifications.addNotificationResponseReceivedListener(
           (response: Notifications.NotificationResponse) => {
             const data = response.notification.request.content.data;
-            console.log('[Notifications] Full notification response:', JSON.stringify(response, null, 2));
-            console.log('[Notifications] Notification data:', JSON.stringify(data, null, 2));
+            //console.log('[Notifications] Full notification response:', JSON.stringify(response, null, 2));
+            //console.log('[Notifications] Notification data:', JSON.stringify(data, null, 2));
 
             // Handle deep linking
             const deepLink = handleNotificationDeepLink(data);
-            console.log('[Notifications] Generated deep link:', JSON.stringify(deepLink, null, 2));
+            //console.log('[Notifications] Generated deep link:', JSON.stringify(deepLink, null, 2));
 
             if (deepLink) {
-              console.log('[Notifications] Navigating to:', deepLink.path, 'with params:', deepLink.params);
+              //console.log('[Notifications] Navigating to:', deepLink.path, 'with params:', deepLink.params);
               router.push(deepLink.path as any, deepLink.params);
             }
           }

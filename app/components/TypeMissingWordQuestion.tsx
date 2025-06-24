@@ -42,16 +42,7 @@ export function TypeMissingWordQuestion({
     setIsQuestionAnswered,
     audioUrls,
 }: TypeMissingWordQuestionProps) {
-    // Logging props and state for debugging
-    console.log('[FillInBlankQuestion] words:', words);
-    console.log('[FillInBlankQuestion] props:', {
-        words,
-        sentenceWords,
-        options,
-        blankIndex,
-        selectedLanguage,
-        questionId
-    });
+
 
     const [selectedOption, setSelectedOption] = useState<number | null>(null);
     const { setFeedback, resetFeedback } = useFeedback();
@@ -69,9 +60,9 @@ export function TypeMissingWordQuestion({
     }, [questionId]); // Add questionId as dependency to reset autoPlayAudio for each new question
 
     // Additional logging for state
-    console.log('[FillInBlankQuestion] sentenceWords:', sentenceWords);
-    console.log('[FillInBlankQuestion] options:', options);
-    console.log('[FillInBlankQuestion] selectedOption:', selectedOption);
+    //console.log('[FillInBlankQuestion] sentenceWords:', sentenceWords);
+    //console.log('[FillInBlankQuestion] options:', options);
+    //console.log('[FillInBlankQuestion] selectedOption:', selectedOption);
 
     // Fallback: If sentenceWords is empty, build a sentence from options and blankIndex
     const effectiveSentenceWords = (sentenceWords && sentenceWords.length > 0)
@@ -168,7 +159,7 @@ export function TypeMissingWordQuestion({
         })
         .flat()
         .filter((x): x is string => Boolean(x));
-    console.log('[FillInBlankQuestion] allOptionAudio:', allOptionAudio);
+    //console.log('[FillInBlankQuestion] allOptionAudio:', allOptionAudio);
 
     return (
         <ThemedView style={[styles.container, { backgroundColor: palette.card }]}>

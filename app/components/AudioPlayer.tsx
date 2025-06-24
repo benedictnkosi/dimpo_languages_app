@@ -36,7 +36,7 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
 
     async function playNextInQueue() {
         if (!queueRef.current.length || currentIndexRef.current >= queueRef.current.length) {
-            console.log('Queue finished or empty');
+            //console.log('Queue finished or empty');
             setIsPlaying(false);
             setCurrentIndex(0);
             currentIndexRef.current = 0;
@@ -56,7 +56,7 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
 
         const currentUrl = queueRef.current[currentIndexRef.current];
         try {
-            console.log('Loading sound from URL:', currentUrl);
+            //console.log('Loading sound from URL:', currentUrl);
 
             // Configure audio mode
             await Audio.setAudioModeAsync({
@@ -102,7 +102,7 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
 
     const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
         if (status.isLoaded && status.didJustFinish) {
-            console.log('Sound finished playing');
+            //console.log('Sound finished playing');
             if (sound) {
                 sound.unloadAsync();
             }
@@ -112,7 +112,7 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
             if (currentIndexRef.current < queueRef.current.length) {
                 playNextInQueue();
             } else {
-                console.log('Queue completed');
+                //console.log('Queue completed');
                 setIsPlaying(false);
                 setCurrentIndex(0);
                 currentIndexRef.current = 0;
@@ -123,7 +123,7 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
 
     async function handlePlayPress() {
         if (!audioUrls?.length) {
-            console.log('No audio URLs available');
+            //console.log('No audio URLs available');
             return;
         }
 
@@ -142,14 +142,14 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
         }
 
         if (isPlaying) {
-            console.log('Stopping playback');
+            //console.log('Stopping playback');
             setIsPlaying(false);
             setCurrentIndex(0);
             currentIndexRef.current = 0;
             return;
         }
 
-        console.log('Starting new playback');
+        //console.log('Starting new playback');
         setCurrentIndex(0);
         currentIndexRef.current = 0;
         setIsPlaying(true);
@@ -201,14 +201,14 @@ export function AudioPlayer({
     );
 
     const characterImageSource = useMemo(() => {
-        console.log('colorScheme', colorScheme);
+        //console.log('colorScheme', colorScheme);
         if (colorScheme === 'dark') {
             return require('@/assets/images/impatient-kitty.gif');
         }
         return characterImage;
     }, [colorScheme, characterImage]);
 
-    console.log('audioUrls', audioUrls);
+    //console.log('audioUrls', audioUrls);
 
     return (
         <View style={styles.speechBubbleRow}>

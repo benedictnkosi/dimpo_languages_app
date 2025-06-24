@@ -5,7 +5,7 @@ import { analytics } from '@/services/analytics';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { OnboardingData } from '../onboarding';
@@ -28,6 +28,15 @@ export default function RegisterForm({ onboardingData, defaultMethod = 'email' }
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [registrationMethod, setRegistrationMethod] = useState<RegistrationMethod>(defaultMethod);
     const { signUp } = useAuth();
+
+    // Track page view when component mounts
+    useEffect(() => {
+        analytics.track('langauges_register_page_viewed', {
+            registration_method: registrationMethod,
+            has_onboarding_data: !!onboardingData,
+            avatar_id: onboardingData?.avatar || 'none'
+        });
+    }, []);
 
     const logAnalyticsEvent = async (eventName: string, params: {
         user_id: string;
@@ -117,6 +126,7 @@ export default function RegisterForm({ onboardingData, defaultMethod = 'email' }
         }
 
         setIsLoading(true);
+        
         try {
             const userEmail = registrationMethod === 'phone'
                 ? `${phoneNumber}@examquiz.co.za`
@@ -160,7 +170,7 @@ export default function RegisterForm({ onboardingData, defaultMethod = 'email' }
                     }
 
                     const learnerResponse = await response.json();
-                    console.log('Learner created:', learnerResponse);
+                    //console.log('Learner created:', learnerResponse);
                 } catch (error) {
                     console.error('Error creating learner:', error);
                     // Don't throw here as the user is already registered
@@ -174,6 +184,18 @@ export default function RegisterForm({ onboardingData, defaultMethod = 'email' }
             await logAnalyticsEvent('register_success', {
                 user_id: user.uid,
                 email: userEmail,
+            });
+
+            // Track detailed registration success
+            analytics.track('languages_register_success', {
+                user_id: user.uid,
+                email: userEmail,
+                registration_method: registrationMethod,
+                has_onboarding_data: !!onboardingData,
+                avatar_id: onboardingData?.avatar || 'none',
+                curriculum: onboardingData?.curriculum || 'CAPS',
+                name_provided: !!name,
+                password_length: password.length
             });
 
             // Show success toast
@@ -192,6 +214,18 @@ export default function RegisterForm({ onboardingData, defaultMethod = 'email' }
             router.replace('/(tabs)');
         } catch (error) {
             console.error('Registration error:', error);
+            
+            // Track registration error
+            analytics.track('languages_register_error', {
+                registration_method: registrationMethod,
+                has_onboarding_data: !!onboardingData,
+                avatar_id: onboardingData?.avatar || 'none',
+                error_type: error instanceof Error ? error.message : 'unknown_error',
+                name_provided: !!name,
+                email_provided: !!email,
+                phone_provided: !!phoneNumber
+            });
+            
             Toast.show({
                 type: 'error',
                 text1: 'Error',
@@ -230,7 +264,10 @@ export default function RegisterForm({ onboardingData, defaultMethod = 'email' }
                                 styles.methodButton,
                                 registrationMethod === 'email' && styles.methodButtonActive
                             ]}
-                            onPress={() => setRegistrationMethod('email')}
+                            onPress={() => {
+                                
+                                setRegistrationMethod('email');
+                            }}
                         >
                             <ThemedText style={[
                                 styles.methodButtonText,
@@ -244,7 +281,10 @@ export default function RegisterForm({ onboardingData, defaultMethod = 'email' }
                                 styles.methodButton,
                                 registrationMethod === 'phone' && styles.methodButtonActive
                             ]}
-                            onPress={() => setRegistrationMethod('phone')}
+                            onPress={() => {
+                                
+                                setRegistrationMethod('phone');
+                            }}
                         >
                             <ThemedText style={[
                                 styles.methodButtonText,

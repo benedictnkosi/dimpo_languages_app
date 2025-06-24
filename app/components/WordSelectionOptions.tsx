@@ -75,7 +75,7 @@ export function WordSelectionOptions({
                     }
                 });
             } catch (error) {
-                console.log('error loading audio');
+                //console.log('error loading audio');
             }
         }
         onSelectWord(Number(id));
