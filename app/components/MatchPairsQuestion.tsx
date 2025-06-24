@@ -1,6 +1,5 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { HOST_URL } from '@/config/api';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import React from 'react';
@@ -68,9 +67,12 @@ export function MatchPairsQuestion({
                 const localUri = `${FileSystem.documentDirectory}audio/${audioFile}`;
                 try {
                     const info = await FileSystem.getInfoAsync(localUri);
-                    newMap.set(word.id, info.exists ? localUri : `${HOST_URL}/api/word/audio/get/${audioFile}`);
+                    if (info.exists) {
+                        newMap.set(word.id, localUri);
+                    }
+                    // If not exists, do not add to map (no fallback)
                 } catch (error) {
-                    newMap.set(word.id, `${HOST_URL}/api/word/audio/get/${audioFile}`);
+                    // fail silently, do not add to map
                 }
             }
         });

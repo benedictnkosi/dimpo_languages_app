@@ -1,10 +1,8 @@
 import { ThemedText } from '@/components/ThemedText';
-import { HOST_URL } from '@/config/api';
 import { Audio, AVPlaybackStatus } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, useColorScheme, View } from 'react-native';
-
-const HOST_PREFIX = `${HOST_URL}/api/word/audio/get/`;
 
 interface AudioButtonProps {
     audioUrls?: string[];
@@ -19,19 +17,40 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
     const [currentIndex, setCurrentIndex] = useState(0);
     const queueRef = useRef<string[]>([]);
     const currentIndexRef = useRef(0);
+    const [isQueueReady, setIsQueueReady] = useState(false);
 
     useEffect(() => {
-        if (audioUrls) {
-            // Ensure URLs are properly formatted
-            queueRef.current = audioUrls.map(url => {
-                if (url.startsWith('http')) {
-                    return url;
+        let isMounted = true;
+        async function filterLocalAudio() {
+            if (audioUrls) {
+                const localAudio = [];
+                for (const url of audioUrls) {
+                    const localUri = `${FileSystem.documentDirectory}audio/${url}`;
+                    try {
+                        const info = await FileSystem.getInfoAsync(localUri);
+                        if (info.exists) {
+                            localAudio.push(localUri);
+                        }
+                    } catch (e) {
+                        // fail silently
+                    }
                 }
-                return `${HOST_PREFIX}${url}`;
-            });
-            currentIndexRef.current = 0;
-            setCurrentIndex(0);
+                if (isMounted) {
+                    queueRef.current = localAudio;
+                    currentIndexRef.current = 0;
+                    setCurrentIndex(0);
+                    setIsQueueReady(true);
+                }
+            } else {
+                if (isMounted) {
+                    queueRef.current = [];
+                    setIsQueueReady(true);
+                }
+            }
         }
+        setIsQueueReady(false); // reset before filtering
+        filterLocalAudio();
+        return () => { isMounted = false; };
     }, [audioUrls]);
 
     async function playNextInQueue() {
@@ -157,15 +176,41 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
     }
 
     useEffect(() => {
-        if (autoPlay && audioUrls?.length) {
-            handlePlayPress();
+        let isMounted = true;
+        async function cleanupAndAutoplay() {
+            // Cleanup previous sound
+            if (sound) {
+                try {
+                    const status = await sound.getStatusAsync();
+                    if (status.isLoaded) {
+                        await sound.stopAsync();
+                        await sound.unloadAsync();
+                    }
+                } catch (error) {
+                    console.error('Error cleaning up sound:', error);
+                }
+                setSound(null);
+            }
+            setIsPlaying(false);
+            setCurrentIndex(0);
+            currentIndexRef.current = 0;
+            queueRef.current = [];
         }
+        cleanupAndAutoplay();
         return () => {
+            isMounted = false;
             if (sound) {
                 sound.unloadAsync();
             }
         };
     }, [audioUrls, autoPlay]);
+
+    // New effect: trigger auto play only when queue is ready
+    useEffect(() => {
+        if (isQueueReady && autoPlay && audioUrls?.length) {
+            handlePlayPress();
+        }
+    }, [isQueueReady, autoPlay, audioUrls]);
 
     return (
         <Pressable
@@ -195,20 +240,12 @@ export function AudioPlayer({
     text
 }: AudioPlayerProps) {
     const colorScheme = useColorScheme();
-    const prefixedAudioUrls = useMemo(() =>
-        audioUrls?.map(url => `${HOST_PREFIX}${url}`),
-        [audioUrls]
-    );
-
     const characterImageSource = useMemo(() => {
-        //console.log('colorScheme', colorScheme);
         if (colorScheme === 'dark') {
             return require('@/assets/images/impatient-kitty.gif');
         }
         return characterImage;
     }, [colorScheme, characterImage]);
-
-    //console.log('audioUrls', audioUrls);
 
     return (
         <View style={styles.speechBubbleRow}>
@@ -226,13 +263,13 @@ export function AudioPlayer({
                     )}
                     <View style={styles.audioButtonsContainer}>
                         <AudioButton
-                            audioUrls={prefixedAudioUrls}
+                            audioUrls={audioUrls}
                             accessibilityLabel="Play audio"
                             playbackRate={1.2}
                             autoPlay={autoPlay}
                         />
                         <AudioButton
-                            audioUrls={prefixedAudioUrls}
+                            audioUrls={audioUrls}
                             accessibilityLabel="Play slow audio"
                             playbackRate={0.8}
                             autoPlay={false}

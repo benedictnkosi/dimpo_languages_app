@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/ThemedText';
-import { HOST_URL } from '@/config/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -65,17 +65,21 @@ export function WordSelectionOptions({
         const word = getWordById(id);
         if (playAudioOnSelect && direction === 'from_english' && word?.audio?.[selectedLanguage]) {
             const sound = new Audio.Sound();
-            const audioUrl = `${HOST_URL}/api/word/audio/get/${word.audio[selectedLanguage]}`;
+            const audioFile = word.audio[selectedLanguage];
+            const localUri = `${FileSystem.documentDirectory}audio/${audioFile}`;
             try {
-                await sound.loadAsync({ uri: audioUrl });
-                await sound.playAsync();
-                sound.setOnPlaybackStatusUpdate((status) => {
-                    if (status.isLoaded && status.didJustFinish) {
-                        sound.unloadAsync();
-                    }
-                });
+                const info = await FileSystem.getInfoAsync(localUri);
+                if (info.exists) {
+                    await sound.loadAsync({ uri: localUri });
+                    await sound.playAsync();
+                    sound.setOnPlaybackStatusUpdate((status) => {
+                        if (status.isLoaded && status.didJustFinish) {
+                            sound.unloadAsync();
+                        }
+                    });
+                }
             } catch (error) {
-                //console.log('error loading audio');
+                // fail silently
             }
         }
         onSelectWord(Number(id));
