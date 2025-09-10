@@ -26,6 +26,14 @@ interface FillInBlankQuestionProps {
     audioUrls?: string[];
 }
 
+// Function to check if answer is correct (exact match only)
+function isAnswerCorrect(userInput: string, correctAnswer: string): boolean {
+    const userTrimmed = userInput.trim().toLowerCase();
+    const correctTrimmed = correctAnswer.trim().toLowerCase();
+    
+    return userTrimmed === correctTrimmed;
+}
+
 function getWordById(words: Word[], id: string | number) {
     return words.find(w => w.id === Number(id));
 }
@@ -112,12 +120,12 @@ export function FillInBlankQuestion({
     const handleCheck = useCallback(() => {
         const correctWord = getWordById(words, sentenceWords[blankIndex] ?? options[blankIndex]);
         const correctAnswer = correctWord?.translations[selectedLanguage] || '';
-        const isAnswerCorrect = userInput.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+        const isCorrect = isAnswerCorrect(userInput, correctAnswer);
         setFeedback({
             isChecked: true,
-            isCorrect: isAnswerCorrect,
-            feedbackText: isAnswerCorrect ? 'Correct!' : "That's not quite right",
-            correctAnswer: !isAnswerCorrect ? correctAnswer : undefined,
+            isCorrect: isCorrect,
+            feedbackText: isCorrect ? 'Correct!' : "That's not quite right",
+            correctAnswer: correctAnswer,
             questionId,
         });
     }, [words, sentenceWords, options, blankIndex, selectedLanguage, userInput, setFeedback, questionId]);
@@ -163,7 +171,7 @@ export function FillInBlankQuestion({
 
     return (
         <ThemedView style={[styles.container, { backgroundColor: palette.card }]}>
-            <ThemedText style={[styles.title, { color: palette.text }]}>✏️ Can you finish this?</ThemedText>
+            <ThemedText style={[styles.title, { color: palette.text }]}>✏️ Fill in the blank?</ThemedText>
             {allOptionAudio.length > 0 && (
                 <AudioPlayer audioUrls={allOptionAudio} showGif={true} autoPlay={autoPlayAudio} />
             )}

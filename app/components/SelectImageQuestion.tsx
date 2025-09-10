@@ -2,6 +2,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { HOST_URL } from '@/config/api';
 import { useTheme } from '@/contexts/ThemeContext';
+import * as FileSystem from 'expo-file-system';
 import { Image } from 'expo-image';
 import React, { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -58,6 +59,9 @@ export function SelectImageQuestion({
     const [originalToShuffledMap, setOriginalToShuffledMap] = React.useState<Map<number, number>>(new Map());
     const [shuffledToOriginalMap, setShuffledToOriginalMap] = React.useState<Map<number, number>>(new Map());
 
+    // Add state to store resolved image URIs
+    const [imageUris, setImageUris] = React.useState<Record<string, string>>({});
+
     // Shuffle options when question changes
     useEffect(() => {
         if (options.length > 0) {
@@ -108,6 +112,30 @@ export function SelectImageQuestion({
         }, 3000);
     }, [questionId]); // Add questionId as dependency to reset autoPlayAudio for each new question
 
+    // Effect to resolve image URIs (local or remote)
+    useEffect(() => {
+        let isMounted = true;
+        async function resolveImageUris() {
+            const uris: Record<string, string> = {};
+            for (const word of words) {
+                const localUri = `${FileSystem.documentDirectory}image/${word.image}`;
+                try {
+                    const fileInfo = await FileSystem.getInfoAsync(localUri);
+                    if (fileInfo.exists) {
+                        uris[word.id] = localUri;
+                    } else {
+                        uris[word.id] = `${HOST_URL}/api/word/image/get/${word.image}`;
+                    }
+                } catch {
+                    uris[word.id] = `${HOST_URL}/api/word/image/get/${word.image}`;
+                }
+            }
+            if (isMounted) setImageUris(uris);
+        }
+        resolveImageUris();
+        return () => { isMounted = false; };
+    }, [words]);
+
     if (audioFile) {
         audioPrompt = (
             <View style={styles.audioPromptContainer}>
@@ -139,7 +167,7 @@ export function SelectImageQuestion({
             isChecked: true,
             isCorrect: isAnswerCorrect,
             feedbackText: isAnswerCorrect ? 'Correct!' : "That's not quite right",
-            correctAnswer: !isAnswerCorrect ? correctLabel : undefined,
+            correctAnswer: correctLabel,
             questionId,
         });
     }
@@ -188,7 +216,7 @@ export function SelectImageQuestion({
                                 accessibilityLabel={`Select ${selectedLanguageWord}`}
                             >
                                 <Image
-                                    source={{ uri: `${HOST_URL}/api/word/image/get/${word.image}` }}
+                                    source={{ uri: imageUris[word.id] || `${HOST_URL}/api/word/image/get/${word.image}` }}
                                     style={styles.optionImage}
                                     contentFit="contain"
                                     transition={200}

@@ -48,10 +48,7 @@ cd android
 ./gradlew clean
 ./gradlew bundleRelease
 
-# Create output directory if it doesn't exist
-mkdir -p /Users/mac1/Documents/aab
-
 # Copy the AAB file
-cp app/build/outputs/bundle/release/app-release.aab /Users/mac1/Documents/aab/app-release.aab
+cp app/build/outputs/bundle/release/app-release.aab /Users/benedictnkosi/Documents/Dimpo Learning Assets/app-release.aab
 
 echo "Build completed!"

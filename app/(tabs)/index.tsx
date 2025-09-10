@@ -102,6 +102,10 @@ export default function HomeScreen() {
   }, [languages.length, isLoading, error]);
 
   const handleLanguagePress = (language: Language) => {
+    if (language.enabled === false) {
+      return;
+    }
+
     // Track language selection
     analytics.track('languages_language_selected', {
       language_code: language.code,
@@ -188,6 +192,9 @@ export default function HomeScreen() {
       opacity: 0.85,
       transform: [{ scale: 0.97 }],
     },
+    languageCardDisabled: {
+      opacity: 0.5,
+    },
     languageEmoji: {
       fontSize: 40,
       marginBottom: 10,
@@ -209,6 +216,12 @@ export default function HomeScreen() {
       fontSize: 13,
       color: colors.textSecondary,
       marginTop: 2,
+    },
+    comingSoon: {
+      marginTop: 6,
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? '#cbd5e1' : '#334155',
     },
     headerImage: {
       height: 200,
@@ -255,13 +268,15 @@ export default function HomeScreen() {
           <View>
             <ThemedView style={styles.languagesContainer}>
               {languages
-                .filter(l => l.name !== 'English')
+                .filter(l => l.name !== 'English' && l.name !== 'Afrikaans')
                 .sort((a, b) => {
                   const speakersA = SPEAKERS_DATA[getSpeakersKey(a.name)]?.speakers || 0;
                   const speakersB = SPEAKERS_DATA[getSpeakersKey(b.name)]?.speakers || 0;
                   return speakersB - speakersA;
                 })
-                .map((language) => (
+                .map((language) => {
+                  const isEnabled = language.enabled !== false;
+                  return (
                   <Pressable
                     key={language.id}
                     style={({ pressed }) => [
@@ -277,11 +292,14 @@ export default function HomeScreen() {
                               : '#fff'
                         },
                       ],
-                      pressed && styles.languageCardPressed,
+                      !isEnabled && styles.languageCardDisabled,
+                      pressed && isEnabled && styles.languageCardPressed,
                     ]}
                     onPress={() => handleLanguagePress(language)}
+                    disabled={!isEnabled}
                     accessibilityRole="button"
                     accessibilityLabel={`Select ${language.name}`}
+                    accessibilityState={{ disabled: !isEnabled }}
                   >
                     <ThemedText style={styles.languageEmoji}>
                       {LANGUAGE_EMOJIS[language.name] || '🌍'}
@@ -293,6 +311,11 @@ export default function HomeScreen() {
                       {language.nativeName}
                     </ThemedText>
                     {(() => {
+                      if (!isEnabled) {
+                        return (
+                          <ThemedText style={styles.comingSoon}>Coming soon</ThemedText>
+                        );
+                      }
                       const key = getSpeakersKey(language.name);
                       const speakers = SPEAKERS_DATA[key]?.speakers;
                       return speakers ? (
@@ -302,7 +325,7 @@ export default function HomeScreen() {
                       ) : null;
                     })()}
                   </Pressable>
-                ))}
+                )})}
             </ThemedView>
             
             <Pressable

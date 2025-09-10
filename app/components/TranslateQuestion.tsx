@@ -143,7 +143,7 @@ export function TranslateQuestion({
             isChecked: true,
             isCorrect: isAnswerCorrect,
             feedbackText: isAnswerCorrect ? 'Correct!' : "That's not quite right",
-            correctAnswer: !isAnswerCorrect ? correctAnswer : undefined,
+            correctAnswer: correctAnswer,
             questionId,
         });
     }

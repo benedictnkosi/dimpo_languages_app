@@ -5,12 +5,13 @@ import { ThemedView } from '@/components/ThemedView';
 import { HOST_URL } from '@/config/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import Modal from 'react-native-modal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -398,6 +399,34 @@ export default function ProfileScreen() {
               Delete Account
             </ThemedText>
           </TouchableOpacity>
+
+          {/* DEV ONLY: Button to clear AsyncStorage and SecureStore */}
+          {process.env.NODE_ENV === 'development' && (
+            <View style={{ flexDirection: 'row', gap: 8, margin: 16 }}>
+              <TouchableOpacity
+                style={{ backgroundColor: '#ef4444', padding: 10, borderRadius: 8, flex: 1 }}
+                onPress={async () => {
+                  await AsyncStorage.clear();
+                  Alert.alert('AsyncStorage cleared');
+                }}
+              >
+                <ThemedText style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
+                  Clear AsyncStorage (DEV)
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ backgroundColor: '#f59e42', padding: 10, borderRadius: 8, flex: 1 }}
+                onPress={async () => {
+                  await SecureStore.deleteItemAsync('dailyLessonCount');
+                  Alert.alert('SecureStore daily limit cleared');
+                }}
+              >
+                <ThemedText style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
+                  Clear Daily Limit (DEV)
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          )}
         </ThemedView>
       </ScrollView>
 

@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Lesson {
@@ -1383,33 +1383,6 @@ export default function LessonsScreen() {
     return (
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
             <View style={styles.container}>
-                {/* DEV ONLY: Button to clear AsyncStorage */}
-                {process.env.NODE_ENV === 'development' && (
-                    <View style={{ flexDirection: 'row', gap: 8, margin: 16 }}>
-                        <Pressable
-                            style={{ backgroundColor: '#ef4444', padding: 10, borderRadius: 8, flex: 1 }}
-                            onPress={async () => {
-                                await AsyncStorage.clear();
-                                Alert.alert('AsyncStorage cleared');
-                            }}
-                        >
-                            <ThemedText style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
-                                Clear AsyncStorage (DEV)
-                            </ThemedText>
-                        </Pressable>
-                        <Pressable
-                            style={{ backgroundColor: '#f59e42', padding: 10, borderRadius: 8, flex: 1 }}
-                            onPress={async () => {
-                                await SecureStore.deleteItemAsync('dailyLessonCount');
-                                Alert.alert('SecureStore daily limit cleared');
-                            }}
-                        >
-                            <ThemedText style={{ color: '#fff', fontWeight: 'bold', textAlign: 'center' }}>
-                                Clear Daily Limit (DEV)
-                            </ThemedText>
-                        </Pressable>
-                    </View>
-                )}
                 <LessonHeader
                     title={languageName as string}
                     languageName={languageName as string}

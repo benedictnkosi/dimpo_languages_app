@@ -1,4 +1,5 @@
 import { ThemedText } from '@/components/ThemedText';
+import { HOST_URL } from '@/config/api';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -11,7 +12,8 @@ interface AudioButtonProps {
     autoPlay?: boolean;
 }
 
-function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPlay = false }: AudioButtonProps) {
+function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPlay = false }: AudioButtonProps) {
+    console.log('AudioButton rendered with audioUrls:', audioUrls);
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -20,28 +22,54 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
     const [isQueueReady, setIsQueueReady] = useState(false);
 
     useEffect(() => {
+        console.log('useEffect for filterLocalAudio triggered with audioUrls:', audioUrls);
         let isMounted = true;
         async function filterLocalAudio() {
+            console.log('filterLocalAudio called');
+            console.log('audioUrls:', audioUrls);
             if (audioUrls) {
                 const localAudio = [];
                 for (const url of audioUrls) {
                     const localUri = `${FileSystem.documentDirectory}audio/${url}`;
+                    console.log('Checking localUri:', localUri);
                     try {
                         const info = await FileSystem.getInfoAsync(localUri);
+                        console.log('File info for', url, ':', info);
                         if (info.exists) {
                             localAudio.push(localUri);
+                            console.log('Added to localAudio:', localUri);
+                        } else {
+                            // Try to download from remote
+                            const remoteUrl = `${HOST_URL}/api/word/audio/get/${url}`;
+                            console.log('File does not exist, downloading from:', remoteUrl);
+                            try {
+                                // Ensure the audio directory exists
+                                await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}audio/`, { intermediates: true });
+                            } catch (e) {
+                                // Directory may already exist
+                            }
+                            try {
+                                const downloadResult = await FileSystem.downloadAsync(remoteUrl, localUri);
+                                console.log('Downloaded file to:', downloadResult.uri);
+                                localAudio.push(downloadResult.uri);
+                            } catch (downloadError) {
+                                console.error('Failed to download audio:', remoteUrl, downloadError);
+                            }
                         }
                     } catch (e) {
-                        // fail silently
+                        console.error('Error checking file:', url, e);
                     }
                 }
+                console.log('Final localAudio array:', localAudio);
                 if (isMounted) {
                     queueRef.current = localAudio;
                     currentIndexRef.current = 0;
                     setCurrentIndex(0);
                     setIsQueueReady(true);
+                    console.log('Queue ready, length:', localAudio.length);
                 }
             } else {
+                console.log('No audioUrls provided');
                 if (isMounted) {
                     queueRef.current = [];
                     setIsQueueReady(true);
@@ -93,7 +121,7 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
             setSound(newSound);
             setIsPlaying(true);
 
-            if (playbackRate && playbackRate !== 1.2) {
+            if (playbackRate) {
                 await newSound.setRateAsync(playbackRate, true);
             }
         } catch (error) {
@@ -141,36 +169,83 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
     };
 
     async function handlePlayPress() {
+        console.log('handlePlayPress called');
+        console.log('audioUrls:', audioUrls);
+        console.log('sound:', sound);
+        console.log('isPlaying:', isPlaying);
+        console.log('queueRef.current:', queueRef.current);
+        console.log('currentIndexRef.current:', currentIndexRef.current);
+        console.log('isQueueReady:', isQueueReady);
+        
         if (!audioUrls?.length) {
-            //console.log('No audio URLs available');
+            console.log('No audio URLs available');
             return;
         }
 
-        // Only try to clean up if we have a loaded sound
+        // If queue is not ready or empty, try to populate it first
+        if (!isQueueReady || queueRef.current.length === 0) {
+            console.log('Queue not ready or empty, attempting to populate...');
+            // Force re-populate the queue
+            const localAudio = [];
+            for (const url of audioUrls) {
+                const localUri = `${FileSystem.documentDirectory}audio/${url}`;
+                console.log('Checking localUri:', localUri);
+                try {
+                    const info = await FileSystem.getInfoAsync(localUri);
+                    console.log('File info for', url, ':', info);
+                    if (info.exists) {
+                        localAudio.push(localUri);
+                        console.log('Added to localAudio:', localUri);
+                    }
+                } catch (e) {
+                    console.error('Error checking file:', url, e);
+                }
+            }
+            queueRef.current = localAudio;
+            currentIndexRef.current = 0;
+            setCurrentIndex(0);
+            setIsQueueReady(true);
+            console.log('Queue populated, length:', localAudio.length);
+        }
+
+        // Always clean up existing sound first
         if (sound) {
             try {
                 const status = await sound.getStatusAsync();
+                console.log('Existing sound status:', status);
                 if (status.isLoaded) {
                     await sound.stopAsync();
                     await sound.unloadAsync();
+                    console.log('Stopped and unloaded existing sound');
                 }
             } catch (error) {
-                console.error('Error cleaning up sound:', error);
+                // Only log if it's not the "not loaded" error
+                if (!(error instanceof Error) || !error.message?.includes('not loaded')) {
+                    console.error('Error cleaning up sound:', error);
+                }
             }
             setSound(null);
         }
 
+        // Reset all state
+        setIsPlaying(false);
+        setCurrentIndex(0);
+        currentIndexRef.current = 0;
+
+        // If currently playing, just stop
         if (isPlaying) {
-            //console.log('Stopping playback');
-            setIsPlaying(false);
-            setCurrentIndex(0);
-            currentIndexRef.current = 0;
+            console.log('Stopping playback');
             return;
         }
 
-        //console.log('Starting new playback');
-        setCurrentIndex(0);
-        currentIndexRef.current = 0;
+        // Check if we have audio to play
+        if (queueRef.current.length === 0) {
+            console.log('No audio files available to play');
+            return;
+        }
+
+        // Start new playback
+        console.log('Starting new playback');
         setIsPlaying(true);
         playNextInQueue();
     }
@@ -187,7 +262,10 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
                         await sound.unloadAsync();
                     }
                 } catch (error) {
-                    console.error('Error cleaning up sound:', error);
+                    // Only log if it's not the "not loaded" error
+                    if (!(error instanceof Error) || !error.message?.includes('not loaded')) {
+                        console.error('Error cleaning up sound:', error);
+                    }
                 }
                 setSound(null);
             }
@@ -200,7 +278,12 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.2, autoPl
         return () => {
             isMounted = false;
             if (sound) {
-                sound.unloadAsync();
+                sound.unloadAsync().catch(error => {
+                    // Only log if it's not the "not loaded" error
+                    if (!(error instanceof Error) || !error.message?.includes('not loaded')) {
+                        console.error('Error unloading sound in cleanup:', error);
+                    }
+                });
             }
         };
     }, [audioUrls, autoPlay]);
@@ -265,7 +348,7 @@ export function AudioPlayer({
                         <AudioButton
                             audioUrls={audioUrls}
                             accessibilityLabel="Play audio"
-                            playbackRate={1.2}
+                            playbackRate={1.0}
                             autoPlay={autoPlay}
                         />
                         <AudioButton

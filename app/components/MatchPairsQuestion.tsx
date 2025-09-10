@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { HOST_URL } from '@/config/api';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import React from 'react';
@@ -67,17 +68,37 @@ export function MatchPairsQuestion({
                 const localUri = `${FileSystem.documentDirectory}audio/${audioFile}`;
                 try {
                     const info = await FileSystem.getInfoAsync(localUri);
+                    console.log('Checking local audio file:', localUri, info);
                     if (info.exists) {
                         newMap.set(word.id, localUri);
+                        console.log('Audio exists locally for word', word.id, localUri);
+                    } else {
+                        // Try to download from remote
+                        const remoteUrl = `${HOST_URL}/api/word/audio/get/${audioFile}`;
+                        console.log('Attempting to download audio for word', word.id, 'from', remoteUrl);
+                        try {
+                            await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}audio/`, { intermediates: true });
+                        } catch (e) {
+                            // Directory may already exist
+                        }
+                        try {
+                            const downloadResult = await FileSystem.downloadAsync(remoteUrl, localUri);
+                            console.log('Downloaded audio for word', word.id, 'to', downloadResult.uri);
+                            const downloadedInfo = await FileSystem.getInfoAsync(downloadResult.uri);
+                            console.log('Downloaded file info:', downloadedInfo);
+                            newMap.set(word.id, downloadResult.uri);
+                        } catch (downloadError) {
+                            console.error('Failed to download audio for word', word.id, remoteUrl, downloadError);
+                        }
                     }
-                    // If not exists, do not add to map (no fallback)
                 } catch (error) {
-                    // fail silently, do not add to map
+                    console.error('Error checking local audio for word', word.id, error);
                 }
             }
         });
 
         Promise.all(promises).then(() => {
+            console.log('Final audioUrlMap:', newMap);
             setAudioUrlMap(newMap);
         });
     }, [words, selectedLanguage]);
@@ -117,11 +138,6 @@ export function MatchPairsQuestion({
 
     const handleAudioCardPress = async (wordId: number) => {
         if (disabledLeftIds.has(wordId) || justMatchedId === wordId) return;
-
-        // If the card is already selected, just return
-        if (selectedAudioId === wordId) {
-            return;
-        }
 
         setSelectedAudioId(wordId);
 
@@ -240,7 +256,7 @@ export function MatchPairsQuestion({
             isChecked: true,
             isCorrect: allMatched,
             feedbackText: allMatched ? 'All pairs matched!' : 'Some pairs are not matched yet.',
-            correctAnswer: !allMatched ? words.map(w => w.translations['en']).join(', ') : undefined,
+            correctAnswer: undefined,
             questionId,
         });
     }

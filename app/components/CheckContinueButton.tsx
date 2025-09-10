@@ -2,6 +2,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { HOST_URL } from '@/config/api';
 import { useTheme } from '@/contexts/ThemeContext';
 import { analytics } from '@/services/analytics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
@@ -55,8 +56,8 @@ export function FeedbackMessage({ onContinue }: { onContinue: () => void }) {
                 <ThemedText style={[styles.feedbackText, { color: isChecked && !isCorrect ? colors.error : colors.success }]}>
                     {feedbackText || (isCorrect ? '✅ Correct!' : '❌ That\'s not quite right')}
                 </ThemedText>
-                {!isCorrect && correctAnswer && (
-                    <ThemedText style={[styles.correctAnswerText, { color: colors.error }]}>
+                {correctAnswer && (
+                    <ThemedText style={[styles.correctAnswerText, { color: isCorrect ? colors.success : colors.error }]}>
                         💡 Correct answer: {correctAnswer}
                     </ThemedText>
                 )}
@@ -77,7 +78,7 @@ export function FeedbackMessage({ onContinue }: { onContinue: () => void }) {
 }
 
 export function FeedbackButton({ isDisabled, onCheck, onContinue }: FeedbackButtonProps) {
-    const { isChecked, isCorrect } = useFeedback();
+    const { isChecked, isCorrect, questionId } = useFeedback();
     const { width } = useWindowDimensions();
     const scale = React.useRef(new Animated.Value(1)).current;
     const insets = useSafeAreaInsets();
@@ -137,13 +138,21 @@ export function FeedbackButton({ isDisabled, onCheck, onContinue }: FeedbackButt
     const handleCheck = async () => {
         await onCheck();
         // Wait for the feedback context to update
-        setTimeout(() => {
-            // Track analytics for first-time question answer
-            analytics.track('question_answered', {
-                isCorrect: latestFeedbackRef.current.isCorrect,
-                timestamp: new Date().toISOString(),
-            });
-            
+        setTimeout(async () => {
+            // Only log the first answer for this question
+            const storageKey = `first_answer_logged`;
+            try {
+                const alreadyLogged = await AsyncStorage.getItem(storageKey);
+                if (!alreadyLogged) {
+                    analytics.track('question_answered', {
+                        isCorrect: latestFeedbackRef.current.isCorrect,
+                        timestamp: new Date().toISOString(),
+                    });
+                    await AsyncStorage.setItem(storageKey, 'true');
+                }
+            } catch (e) {
+                // fail silently
+            }
             playFeedbackSound(latestFeedbackRef.current.isCorrect ? 'correct' : 'wrong');
         }, 100);
     };
