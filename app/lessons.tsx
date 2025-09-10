@@ -485,6 +485,7 @@ export default function LessonsScreen() {
                     throw new Error('No auth data found');
                 }
                 // Fetch lessons first
+                console.log('[fetchData] fetching lessons for language:', languageCode);
                 const lessonsResponse = await fetch(`${HOST_URL}/api/lessons?language=${languageCode}`);
                 if (!lessonsResponse.ok) {
                     throw new Error('Failed to fetch lessons');

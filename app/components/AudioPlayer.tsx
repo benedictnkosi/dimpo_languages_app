@@ -20,6 +20,8 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPl
     const queueRef = useRef<string[]>([]);
     const currentIndexRef = useRef(0);
     const [isQueueReady, setIsQueueReady] = useState(false);
+    // Preloaded sounds mapped 1:1 to queueRef.current
+    const preloadedSoundsRef = useRef<Array<Audio.Sound | null>>([]);
 
     useEffect(() => {
         console.log('useEffect for filterLocalAudio triggered with audioUrls:', audioUrls);
@@ -81,9 +83,43 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPl
         return () => { isMounted = false; };
     }, [audioUrls]);
 
+    async function ensureAudioMode() {
+        await Audio.setAudioModeAsync({
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+            shouldDuckAndroid: true,
+        });
+    }
+
+    async function preloadSounds() {
+        // Clear any previous preloaded sounds
+        for (const s of preloadedSoundsRef.current) {
+            if (s) {
+                try {
+                    const status = await s.getStatusAsync();
+                    if (status.isLoaded) {
+                        await s.unloadAsync();
+                    }
+                } catch (_) {}
+            }
+        }
+        preloadedSoundsRef.current = [];
+
+        // Preload sounds to minimize gaps
+        for (let i = 0; i < queueRef.current.length; i++) {
+            try {
+                const soundObj = new Audio.Sound();
+                await soundObj.loadAsync({ uri: queueRef.current[i] }, { shouldPlay: false }, true);
+                preloadedSoundsRef.current[i] = soundObj;
+            } catch (e) {
+                console.error('Failed to preload sound at index', i, e);
+                preloadedSoundsRef.current[i] = null;
+            }
+        }
+    }
+
     async function playNextInQueue() {
         if (!queueRef.current.length || currentIndexRef.current >= queueRef.current.length) {
-            //console.log('Queue finished or empty');
             setIsPlaying(false);
             setCurrentIndex(0);
             currentIndexRef.current = 0;
@@ -101,28 +137,41 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPl
             return;
         }
 
-        const currentUrl = queueRef.current[currentIndexRef.current];
         try {
-            //console.log('Loading sound from URL:', currentUrl);
+            await ensureAudioMode();
 
-            // Configure audio mode
-            await Audio.setAudioModeAsync({
-                playsInSilentModeIOS: true,
-                staysActiveInBackground: true,
-                shouldDuckAndroid: true,
-            });
+            // Use preloaded sound if available; otherwise load on demand
+            let nextSound: Audio.Sound | null = preloadedSoundsRef.current[currentIndexRef.current] ?? null;
+            if (!nextSound) {
+                console.log('Sound not preloaded, loading on demand');
+                const { sound: newSound } = await Audio.Sound.createAsync(
+                    { uri: queueRef.current[currentIndexRef.current] },
+                    { shouldPlay: false },
+                    onPlaybackStatusUpdate
+                );
+                nextSound = newSound;
+            } else {
+                nextSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+            }
 
-            const { sound: newSound } = await Audio.Sound.createAsync(
-                { uri: currentUrl },
-                { shouldPlay: true },
-                onPlaybackStatusUpdate
-            );
-
-            setSound(newSound);
+            setSound(nextSound);
             setIsPlaying(true);
 
             if (playbackRate) {
-                await newSound.setRateAsync(playbackRate, true);
+                await nextSound.setRateAsync(playbackRate, true);
+            }
+            await nextSound.playAsync();
+
+            // Opportunistically preload the next item if not already
+            const upcomingIndex = currentIndexRef.current + 1;
+            if (upcomingIndex < queueRef.current.length && !preloadedSoundsRef.current[upcomingIndex]) {
+                try {
+                    const s = new Audio.Sound();
+                    await s.loadAsync({ uri: queueRef.current[upcomingIndex] }, { shouldPlay: false }, true);
+                    preloadedSoundsRef.current[upcomingIndex] = s;
+                } catch (e) {
+                    console.warn('Could not preload upcoming sound at index', upcomingIndex, e);
+                }
             }
         } catch (error) {
             console.error('Error playing audio:', error);
@@ -149,17 +198,20 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPl
 
     const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
         if (status.isLoaded && status.didJustFinish) {
-            //console.log('Sound finished playing');
-            if (sound) {
-                sound.unloadAsync();
+            // Unload the sound that just finished to free memory
+            const justFinishedIndex = currentIndexRef.current;
+            const finishedSound = preloadedSoundsRef.current[justFinishedIndex];
+            if (finishedSound) {
+                finishedSound.unloadAsync().catch(() => {});
+                preloadedSoundsRef.current[justFinishedIndex] = null;
             }
+
             currentIndexRef.current += 1;
             setCurrentIndex(currentIndexRef.current);
 
             if (currentIndexRef.current < queueRef.current.length) {
                 playNextInQueue();
             } else {
-                //console.log('Queue completed');
                 setIsPlaying(false);
                 setCurrentIndex(0);
                 currentIndexRef.current = 0;
@@ -244,6 +296,9 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPl
             return;
         }
 
+        // Preload before starting to reduce gaps
+        await preloadSounds();
+
         // Start new playback
         console.log('Starting new playback');
         setIsPlaying(true);
@@ -269,6 +324,19 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPl
                 }
                 setSound(null);
             }
+            // Cleanup all preloaded sounds
+            for (const s of preloadedSoundsRef.current) {
+                if (s) {
+                    try {
+                        const status = await s.getStatusAsync();
+                        if (status.isLoaded) {
+                            await s.unloadAsync();
+                        }
+                    } catch (_) {}
+                }
+            }
+            preloadedSoundsRef.current = [];
+
             setIsPlaying(false);
             setCurrentIndex(0);
             currentIndexRef.current = 0;
@@ -285,6 +353,13 @@ function AudioButton({ audioUrls, accessibilityLabel, playbackRate = 1.0, autoPl
                     }
                 });
             }
+            // Cleanup any remaining preloaded sounds
+            preloadedSoundsRef.current.forEach(s => {
+                if (s) {
+                    s.unloadAsync().catch(() => {});
+                }
+            });
+            preloadedSoundsRef.current = [];
         };
     }, [audioUrls, autoPlay]);
 

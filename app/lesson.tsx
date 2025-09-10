@@ -401,7 +401,7 @@ function LessonContent() {
             elevation: 8,
         },
         streakTitle: {
-            fontSize: 32,
+            fontSize: 24,
             fontWeight: 'bold',
             color: colors.accent,
             marginBottom: 16,
@@ -539,6 +539,7 @@ function LessonContent() {
         async function fetchQuestions() {
             //console.log('[Lesson] fetchQuestions called', { lessonId, languageCode });
             try {
+                console.log('[Lesson] fetchQuestions fetching questions for lesson:', lessonId, 'language:', languageCode);
                 const response = await fetch(`${HOST_URL}/api/language-questions/lesson/${lessonId}/language/${languageCode}`);
                 //console.log('[Lesson] fetchQuestions response status:', response.status);
                 const data = await response.json();
